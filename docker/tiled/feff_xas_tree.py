@@ -232,4 +232,4 @@ def raw_mongo(query, tree):
         queries=tree._queries + [json.loads(query.query)],
     )
 
-Tree.register_query(RawMongo, raw_mongo)
+FEFFXASTree.register_query(RawMongo, raw_mongo)

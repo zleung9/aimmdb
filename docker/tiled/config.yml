@@ -3,6 +3,11 @@ trees:
     tree: tiled.trees.files:Tree.from_directory
     args:
       directory: /data/wanli-cleaned
+  - path: /xas_nmc_feff
+    tree: feff_xas_tree:FEFFXASTree.from_uri
+    args:
+      uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
+      collection_name: "xas"
 uvicorn:
   host: 0.0.0.0
   port: 8000
