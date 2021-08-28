@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
 
-cat /secrets/tiled-auth.yml >> config.yml
-export TILED_CONFIG=/deploy/config.yml
+cp /secrets/tiled-auth.yml /deploy/config/
 /app/docker/check_config.py && exec gunicorn --config /app/docker/gunicorn_config.py
