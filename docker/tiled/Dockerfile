@@ -1,6 +1,6 @@
 FROM ghcr.io/bluesky/tiled:main as base
 
-COPY feff_xas_tree.py requirements.txt entrypoint.sh /deploy/
+COPY gunicorn_config.py feff_xas_tree.py requirements.txt entrypoint.sh /deploy/
 COPY config.yml /deploy/config/
 ENV TILED_CONFIG=/deploy/config
 RUN pip install -r requirements.txt
