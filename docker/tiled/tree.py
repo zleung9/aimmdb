@@ -46,7 +46,7 @@ def _get_database(uri):
         client = pymongo.MongoClient(uri)
         return client.get_database()
 
-class FEFFXASTree(collections.abc.Mapping, IndexersMixin):
+class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
 
     # Define classmethods for managing what queries this Tree knows.
     query_registry = QueryTranslationRegistry()
@@ -125,21 +125,7 @@ class FEFFXASTree(collections.abc.Mapping, IndexersMixin):
             return {}
 
     def _build_dataset(self, doc):
-        sp = doc["spectrum"]
-        metadata_keys = set(doc.keys()) - set(["spectrum", "_id"])
-        metadata = {k : doc[k] for k in metadata_keys}
-        dset = xr.Dataset(
-          data_vars = dict(
-            mu=("energy", sp["mu"]),
-            mu0=("energy", sp["mu0"]),
-            chi=("k", sp["chi"])
-          ),
-          coords=dict(
-            energy=sp["energies"],
-            relative_energy=sp["relative_energies"],
-            k=sp["wavenumber"]
-          ))
-        return DatasetAdapter(dset, metadata=metadata)
+        raise NotImplementedError
 
     def __len__(self):
         return self._collection.count_documents(self._build_mongo_query())
@@ -231,5 +217,23 @@ def raw_mongo(query, tree):
     return tree.new_variation(
         queries=tree._queries + [json.loads(query.query)],
     )
+
+class FEFFXASTree(MongoCollectionTree):
+    def _build_dataset(self, doc):
+        sp = doc["spectrum"]
+        metadata_keys = set(doc.keys()) - set(["spectrum", "_id"])
+        metadata = {k : doc[k] for k in metadata_keys}
+        dset = xr.Dataset(
+          data_vars = dict(
+            mu=("energy", sp["mu"]),
+            mu0=("energy", sp["mu0"]),
+            chi=("k", sp["chi"])
+          ),
+          coords=dict(
+            energy=sp["energies"],
+            relative_energy=sp["relative_energies"],
+            k=sp["wavenumber"]
+          ))
+        return DatasetAdapter(dset, metadata=metadata)
 
 FEFFXASTree.register_query(RawMongo, raw_mongo)
