@@ -3,10 +3,10 @@ trees:
     tree: tiled.trees.files:Tree.from_directory
     args:
       directory: /data/wanli-cleaned
-  - path: /chenjun
+  - path: /chengjun
     tree: tiled.trees.files:Tree.from_directory
     args:
-      directory: /data/chenjun/tiff_seq_test/files
+      directory: /data/chengjun/tiff_seq_test/files
       subdirectory_handler: tiled.readers.tiff_sequence:subdirectory_handler
   - path: /xas_nmc_feff
     tree: tree:FEFFXASTree.from_uri
