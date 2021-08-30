@@ -236,4 +236,15 @@ class FEFFXASTree(MongoCollectionTree):
           ))
         return DatasetAdapter(dset, metadata=metadata)
 
+class QuantyXESTree(MongoCollectionTree):
+    def _build_dataset(self, doc):
+        metadata_keys = set(doc.keys()) - set(["mu", "energies", "_id"])
+        metadata = {k : doc[k] for k in metadata_keys}
+        dset = xr.Dataset(
+                data_vars = dict(mu = ("energy", doc["mu"])),
+                coords=dict(energy=doc["energies"])
+                )
+        return DatasetAdapter(dset, metadata=metadata)
+
 FEFFXASTree.register_query(RawMongo, raw_mongo)
+QuantyXESTree.register_query(RawMongo, raw_mongo)

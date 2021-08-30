@@ -8,6 +8,11 @@ trees:
     args:
       uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
       collection_name: "xas"
+  - path: /xes_nmc_quanty
+    tree: tree:QuantyXESTree.from_uri
+    args:
+      uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
+      collection_name: "xes"
 uvicorn:
   host: 0.0.0.0
   port: 8000
