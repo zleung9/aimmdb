@@ -23,6 +23,9 @@ from tiled.readers.xarray import DatasetAdapter
 
 from tiled.query_registration import QueryTranslationRegistry, register
 
+from tiled.trees.in_memory import Tree
+from tiled.readers.dataframe import DataFrameAdapter
+
 @register(name="raw_mongo")
 @dataclass
 class RawMongo:
@@ -248,3 +251,15 @@ class QuantyXESTree(MongoCollectionTree):
 
 FEFFXASTree.register_query(RawMongo, raw_mongo)
 QuantyXESTree.register_query(RawMongo, raw_mongo)
+
+
+df = DataFrameAdapter.from_pandas(
+        pd.DataFrame({
+            "A" : np.random.rand(200),
+            "B" : np.random.rand(200),
+            "C" : np.random.rand(200),
+            "D" : np.random.rand(200)
+            }),
+        npartitions=1
+        )
+test = Tree({"test" : df})

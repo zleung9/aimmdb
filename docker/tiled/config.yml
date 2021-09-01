@@ -18,6 +18,8 @@ trees:
     args:
       uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
       collection_name: "xes"
+  - path: /test
+    tree: tree:test
 uvicorn:
   host: 0.0.0.0
   port: 8000
