@@ -5,6 +5,7 @@ trees:
     tree: tiled.trees.files:Tree.from_directory
     args:
       directory: /data/wanli-cleaned
+      poll_interval: 0
   - path: /xas_nmc_feff
     tree: tree:FEFFXASTree.from_uri
     args:
