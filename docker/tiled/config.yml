@@ -16,12 +16,11 @@ trees:
     args:
       uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
       collection_name: "xes"
+  - path: /chengjun
+    tree: heald_labview:RIXSImagesAndTable.from_directory
+    args:
+      directory: /data/chengjun/tiff_seq_test/files
 uvicorn:
   host: 0.0.0.0
   port: 8000
 
-    #  - path: /chengjun
-    #    tree: tiled.trees.files:Tree.from_directory
-    #    args:
-    #      directory: /data/chengjun/tiff_seq_test/files
-    #      subdirectory_handler: tiled.readers.tiff_sequence:subdirectory_handler
