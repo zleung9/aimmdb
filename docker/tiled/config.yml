@@ -17,7 +17,7 @@ trees:
       uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
       collection_name: "xes"
   - path: /chengjun
-    tree: heald_labview:RIXSImagesAndTable.from_directory
+    tree: aimm_adapters.heald_labview:RIXSImagesAndTable.from_directory
     args:
       directory: /data/chengjun/tiff_seq_test/files
 uvicorn:
