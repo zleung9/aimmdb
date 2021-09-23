@@ -235,7 +235,7 @@ class FEFFXASTree(MongoCollectionTree):
             "chi" : sp["chi"]
             })
 
-        return DataFrameAdapter(df, metadata=metadata)
+        return DataFrameAdapter(df, metadata=metadata, npartitions=1)
 
 class QuantyXESTree(MongoCollectionTree):
     def _build_dataset(self, doc):
@@ -245,7 +245,7 @@ class QuantyXESTree(MongoCollectionTree):
             "energy" : doc["energies"],
             "mu" : doc["mu"],
             })
-        return DataFrameAdapter(df, metadata=metadata)
+        return DataFrameAdapter.from_pandas(df, metadata=metadata, npartitions=1)
 
 FEFFXASTree.register_query(RawMongo, raw_mongo)
 QuantyXESTree.register_query(RawMongo, raw_mongo)
