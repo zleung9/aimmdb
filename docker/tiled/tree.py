@@ -3,8 +3,7 @@ import sys
 import dask.array
 import dask.dataframe
 import numpy as np
-import pandas as pd 
-import xarray as xr
+import pandas as pd
 import uuid
 import itertools
 
@@ -19,7 +18,7 @@ from dataclasses import dataclass
 
 from tiled.utils import import_object, DictView
 from tiled.trees.utils import IndexersMixin, UNCHANGED
-from tiled.readers.xarray import DatasetAdapter
+from tiled.readers.dataframe import DataFrameAdapter
 
 from tiled.query_registration import QueryTranslationRegistry, register
 
@@ -226,28 +225,27 @@ class FEFFXASTree(MongoCollectionTree):
         sp = doc["spectrum"]
         metadata_keys = set(doc.keys()) - set(["spectrum", "_id"])
         metadata = {k : doc[k] for k in metadata_keys}
-        dset = xr.Dataset(
-          data_vars = dict(
-            mu=("energy", sp["mu"]),
-            mu0=("energy", sp["mu0"]),
-            chi=("k", sp["chi"])
-          ),
-          coords=dict(
-            energy=sp["energies"],
-            relative_energy=sp["relative_energies"],
-            k=sp["wavenumber"]
-          ))
-        return DatasetAdapter(dset, metadata=metadata)
+
+        df = pd.DataFrame({
+            "energy" : sp["energies"],
+            "energy_relative" : sp["relative_energies"],
+            "k" : sp["wavenumber"],
+            "mu" : sp["mu"],
+            "mu0" : sp["mu0"],
+            "chi" : sp["chi"]
+            })
+
+        return DataFrameAdapter(df, metadata=metadata)
 
 class QuantyXESTree(MongoCollectionTree):
     def _build_dataset(self, doc):
         metadata_keys = set(doc.keys()) - set(["mu", "energies", "_id"])
         metadata = {k : doc[k] for k in metadata_keys}
-        dset = xr.Dataset(
-                data_vars = dict(mu = ("energy", doc["mu"])),
-                coords=dict(energy=doc["energies"])
-                )
-        return DatasetAdapter(dset, metadata=metadata)
+        df = pd.DataFrame({
+            "energy" : doc["energies"],
+            "mu" : doc["mu"],
+            })
+        return DataFrameAdapter(df, metadata=metadata)
 
 FEFFXASTree.register_query(RawMongo, raw_mongo)
 QuantyXESTree.register_query(RawMongo, raw_mongo)
