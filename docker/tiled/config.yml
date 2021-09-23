@@ -23,7 +23,7 @@ trees:
   - path: /heald
     tree: files
     args:
-      directory: data/heald/files
+      directory: /data/heald/files
       subdirectory_handler: aimm_adapters.heald_labview:subdirectory_handler
 uvicorn:
   host: 0.0.0.0
