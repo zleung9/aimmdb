@@ -20,11 +20,6 @@ trees:
     tree: aimm_adapters.heald_labview:RIXSImagesAndTable.from_directory
     args:
       directory: /data/chengjun/tiff_seq_test/files
-  - path: /heald
-    tree: files
-    args:
-      directory: /data/heald/files
-      subdirectory_handler: aimm_adapters.heald_labview:subdirectory_handler
 uvicorn:
   host: 0.0.0.0
   port: 8000
@@ -52,3 +47,9 @@ access_control:
       0000-0002-5947-6017: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Dan sees all
       0000-0003-3670-0431: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Joe sees all
       0000-0002-1539-0297: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Dylan sees all
+
+    #  - path: /heald
+    #    tree: files
+    #    args:
+    #      directory: /data/heald/files
+    #      subdirectory_handler: aimm_adapters.heald_labview:subdirectory_handler
