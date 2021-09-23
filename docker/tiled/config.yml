@@ -20,6 +20,11 @@ trees:
     tree: aimm_adapters.heald_labview:RIXSImagesAndTable.from_directory
     args:
       directory: /data/chengjun/tiff_seq_test/files
+  - path: /heald
+    tree: files
+    args:
+      directory: data/heald/files
+      subdirectory_handler: aimm_adapters.heald_labview:subdirectory_handler
 uvicorn:
   host: 0.0.0.0
   port: 8000
