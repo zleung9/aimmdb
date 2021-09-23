@@ -235,7 +235,7 @@ class FEFFXASTree(MongoCollectionTree):
             "chi" : sp["chi"]
             })
 
-        return DataFrameAdapter(df, metadata=metadata, npartitions=1)
+        return DataFrameAdapter.from_pandas(df, metadata=metadata, npartitions=1)
 
 class QuantyXESTree(MongoCollectionTree):
     def _build_dataset(self, doc):
