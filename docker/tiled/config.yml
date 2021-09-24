@@ -47,6 +47,7 @@ access_control:
       0000-0002-5947-6017: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Dan sees all
       0000-0003-3670-0431: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Joe sees all
       0000-0002-1539-0297: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Dylan sees all
+      0000-0002-3337-2930: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Eli sees all
 
     #  - path: /heald
     #    tree: files
