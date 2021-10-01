@@ -9,3 +9,5 @@ worker_tmp_dir = "/dev/shm"
 errorlog = "-"
 accesslog = "-"
 loglevel = "warning"
+# add client's ip address
+access_log_format =  "%({X_Forwarded_For}i)s %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s
