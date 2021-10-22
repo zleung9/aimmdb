@@ -263,4 +263,4 @@ class NewvilleXASTree(MongoCollectionTree):
 
 FEFFXASTree.register_query(RawMongo, raw_mongo)
 QuantyXESTree.register_query(RawMongo, raw_mongo)
-NewvilleTree.register_query(RawMongo, raw_mongo)
+NewvilleXASTree.register_query(RawMongo, raw_mongo)
