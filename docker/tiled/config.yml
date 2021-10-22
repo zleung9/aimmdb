@@ -1,6 +1,4 @@
 trees:
-  - path: /test
-    tree: tree:test
   - path: /wanli
     tree: tiled.trees.files:Tree.from_directory
     args:
@@ -16,6 +14,11 @@ trees:
     args:
       uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
       collection_name: "xes"
+  - path: /newville
+    tree: tree:NewvilleXASTree.from_uri
+    args:
+      uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
+      collection_name: "newville"
   - path: /chengjun
     tree: aimm_adapters.heald_labview:RIXSImagesAndTable.from_directory
     args:

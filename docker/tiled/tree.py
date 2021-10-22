@@ -12,6 +12,9 @@ import json
 import pymongo
 from bson.objectid import ObjectId
 
+import pyarrow as pa
+import pyarrow.parquet as pq
+
 import collections.abc
 
 from dataclasses import dataclass
@@ -24,6 +27,11 @@ from tiled.query_registration import QueryTranslationRegistry, register
 
 from tiled.trees.in_memory import Tree
 from tiled.readers.dataframe import DataFrameAdapter
+
+def deserialize_parquet(data):
+  reader = pa.BufferReader(data)
+  table = pq.read_table(reader)
+  return table.to_pandas()
 
 @register(name="raw_mongo")
 @dataclass
@@ -247,17 +255,12 @@ class QuantyXESTree(MongoCollectionTree):
             })
         return DataFrameAdapter.from_pandas(df, metadata=metadata, npartitions=1)
 
+class NewvilleXASTree(MongoCollectionTree):
+    def _build_dataset(self, doc):
+        df = deserialize_parquet(doc["df"])
+        metadata = doc["metadata"]
+        return DataFrameAdapter.from_pandas(df, metadata=metadata, npartitions=1)
+
 FEFFXASTree.register_query(RawMongo, raw_mongo)
 QuantyXESTree.register_query(RawMongo, raw_mongo)
-
-
-df = DataFrameAdapter.from_pandas(
-        pd.DataFrame({
-            "A" : np.random.rand(200),
-            "B" : np.random.rand(200),
-            "C" : np.random.rand(200),
-            "D" : np.random.rand(200)
-            }),
-        npartitions=1
-        )
-test = Tree({"test" : df})
+NewvilleTree.register_query(RawMongo, raw_mongo)
