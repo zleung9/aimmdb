@@ -1,45 +1,49 @@
 {
-   "bsonType":"object",
-   "required":[
-      "metadata"
-   ],
-   "properties":{
-      "metadata":{
-         "bsonType":"object",
-         "required":[
-            "common"
-         ],
-         "properties":{
-            "common":{
-               "bsonType":"object",
-               "required":[
-                  "element"
-               ],
-               "properties":{
-                  "element":{
-                     "bsonType":"object",
-                     "required":[
-                        "symbol",
-                        "edge"
-                     ],
-                     "properties":{
-                        "symbol":{
-                           "bsonType":[
-                              "string",
-                              "null"
-                           ]
-                        },
-                        "edge":{
-                           "bsonType":[
-                              "string",
-                              "null"
-                           ]
-                        }
-                     }
-                  }
-               }
+  "bsonType": "object",
+  "required": [
+    "metadata",
+    "table"
+  ],
+  "properties": {
+    "metadata": {
+      "bsonType": "object",
+      "required": [
+        "common"
+      ],
+      "properties": {
+        "common": {
+          "bsonType": "object",
+          "required": [
+            "element"
+          ],
+          "properties": {
+            "element": {
+              "bsonType": "object",
+              "required": [
+                "symbol",
+                "edge"
+              ],
+              "properties": {
+                "symbol": {
+                  "bsonType": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "edge": {
+                  "bsonType": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
             }
-         }
+          }
+        }
       }
-   }
+    },
+    "table": {
+      "bsonType": "binData"
+    }
+  }
 }
