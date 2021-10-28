@@ -1,24 +1,19 @@
 trees:
+  - path: /xas_feff_nmc
+    tree: tree:MongoXASTree.from_uri
+    args:
+      uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
+      collection_name: "xas_feff_nmc"
+  - path: /newville
+    tree: tree:MongoXASTree.from_uri
+    args:
+      uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
+      collection_name: "newville"
   - path: /wanli
     tree: tiled.trees.files:Tree.from_directory
     args:
       directory: /data/wanli-cleaned
       poll_interval: 0
-  - path: /xas_nmc_feff
-    tree: tree:FEFFXASTree.from_uri
-    args:
-      uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
-      collection_name: "xas"
-  - path: /xes_nmc_quanty
-    tree: tree:QuantyXESTree.from_uri
-    args:
-      uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
-      collection_name: "xes"
-  - path: /newville
-    tree: tree:NewvilleXASTree.from_uri
-    args:
-      uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
-      collection_name: "newville"
   - path: /chengjun
     tree: aimm_adapters.heald_labview:RIXSImagesAndTable.from_directory
     args:
@@ -52,9 +47,3 @@ access_control:
       0000-0003-3670-0431: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Joe sees all
       0000-0002-1539-0297: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Dylan sees all
       0000-0002-3337-2930: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Eli sees all
-
-    #  - path: /heald
-    #    tree: files
-    #    args:
-    #      directory: /data/heald/files
-    #      subdirectory_handler: aimm_adapters.heald_labview:subdirectory_handler

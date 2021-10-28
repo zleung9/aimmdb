@@ -35,7 +35,7 @@ def deserialize_parquet(data):
 
 @register(name="raw_mongo")
 @dataclass
-class RawMongo:
+class RawMongoQuery:
     """
     Run a MongoDB query against a given collection.
     """
@@ -46,6 +46,17 @@ class RawMongo:
         if isinstance(query, collections.abc.Mapping):
             query = json.dumps(query)
         self.query = query
+
+@register(name="element")
+@dataclass
+class ElementQuery:
+
+    symbol: str
+    edge: str
+
+    def __init__(self, symbol, edge):
+        self.symbol = symbol
+        self.edge = edge
 
 def _get_database(uri):
     if not pymongo.uri_parser.parse_uri(uri)["database"]:
@@ -223,44 +234,22 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         dset = self._build_dataset(doc)
         return (_id, dset)
 
-def raw_mongo(query, tree):
+class MongoXASTree(MongoCollectionTree):
+    def _build_dataset(self, doc):
+        df = deserialize_parquet(doc["table"])
+        metadata = doc["metadata"]
+        return DataFrameAdapter.from_pandas(df, metadata=metadata, npartitions=1)
+
+def run_raw_mongo_query(query, tree):
     return tree.new_variation(
         queries=tree._queries + [json.loads(query.query)],
     )
 
-class FEFFXASTree(MongoCollectionTree):
-    def _build_dataset(self, doc):
-        sp = doc["spectrum"]
-        metadata_keys = set(doc.keys()) - set(["spectrum", "_id"])
-        metadata = {k : doc[k] for k in metadata_keys}
+def run_element_query(query, tree):
+    results = tree.query_registry(
+            RawMongoQuery({"metadata.common.element.symbol" : query.symbol, "metadata.common.element.edge" : query.edge}),
+            tree)
+    return results
 
-        df = pd.DataFrame({
-            "energy" : sp["energies"],
-            "energy_relative" : sp["relative_energies"],
-            "k" : sp["wavenumber"],
-            "mu" : sp["mu"],
-            "mu0" : sp["mu0"],
-            "chi" : sp["chi"]
-            })
-
-        return DataFrameAdapter.from_pandas(df, metadata=metadata, npartitions=1)
-
-class QuantyXESTree(MongoCollectionTree):
-    def _build_dataset(self, doc):
-        metadata_keys = set(doc.keys()) - set(["mu", "energies", "_id"])
-        metadata = {k : doc[k] for k in metadata_keys}
-        df = pd.DataFrame({
-            "energy" : doc["energies"],
-            "mu" : doc["mu"],
-            })
-        return DataFrameAdapter.from_pandas(df, metadata=metadata, npartitions=1)
-
-class NewvilleXASTree(MongoCollectionTree):
-    def _build_dataset(self, doc):
-        df = deserialize_parquet(doc["df"])
-        metadata = doc["metadata"]
-        return DataFrameAdapter.from_pandas(df, metadata=metadata, npartitions=1)
-
-FEFFXASTree.register_query(RawMongo, raw_mongo)
-QuantyXESTree.register_query(RawMongo, raw_mongo)
-NewvilleXASTree.register_query(RawMongo, raw_mongo)
+MongoXASTree.register_query(RawMongoQuery, run_raw_mongo_query)
+MongoXASTree.register_query(ElementQuery, run_element_query)
