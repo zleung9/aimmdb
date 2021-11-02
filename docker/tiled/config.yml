@@ -2,12 +2,16 @@ trees:
   - path: /xas_feff_nmc
     tree: tree:MongoXASTree.from_uri
     args:
-      uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
+      uri: "mongodb://mongodb:27017/aimm?authSource=admin"
+      username: "root"
+      password: ${MONGODB_PASSWORD}
       collection_name: "xas_feff_nmc"
   - path: /newville
     tree: tree:MongoXASTree.from_uri
     args:
-      uri: "mongodb://root:example@mongodb:27017/aimm?authSource=admin"
+      uri: "mongodb://mongodb:27017/aimm?authSource=admin"
+      username: "root"
+      password: ${MONGODB_PASSWORD}
       collection_name: "newville"
   - path: /wanli
     tree: tiled.trees.files:Tree.from_directory

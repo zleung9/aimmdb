@@ -58,13 +58,13 @@ class ElementQuery:
         self.symbol = symbol
         self.edge = edge
 
-def _get_database(uri):
+def _get_database(uri, username, password):
     if not pymongo.uri_parser.parse_uri(uri)["database"]:
         raise ValueError(
             f"Invalid URI: {uri!r} " f"Did you forget to include a database?"
         )
     else:
-        client = pymongo.MongoClient(uri)
+        client = pymongo.MongoClient(uri, username=username, password=password)
         return client.get_database()
 
 class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
@@ -78,6 +78,8 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
     def from_uri(
         cls,
         uri,
+        username,
+        password,
         collection_name,
         *,
         metadata=None,
@@ -85,7 +87,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         authenticated_identity=None,
         ):
 
-        db = _get_database(uri)
+        db = _get_database(uri, username, password)
         collection = db.get_collection(collection_name)
 
         return cls(collection,
