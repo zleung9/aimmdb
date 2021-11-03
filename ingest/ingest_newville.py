@@ -40,10 +40,15 @@ def main():
       df, metadata = read_xdi(str(f))
       metadata["filename"] = f.name
 
-      common = {"element" : {"symbol" : metadata["Element"]["symbol"], "edge" : metadata["Element"]["edge"]}}
+      common = {"element" : {"symbol" : metadata["Element"]["symbol"], "edge" : metadata["Element"]["edge"]},
+                "spec" : "newville"}
       metadata["common"] = common
 
-      doc = {"table" : serialize_parquet(df).tobytes(), "metadata" : metadata}
+      data = {"media_type" : "application/x-parquet",
+              "structure_family" : "dataframe",
+              "data_blob" : serialize_parquet(df).tobytes()}
+
+      doc = {"data" : data, "metadata" : metadata}
       c.insert_one(doc)
 
 if __name__ == "__main__":

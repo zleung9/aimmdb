@@ -46,7 +46,8 @@ def main():
 
             metadata_keys = set(doc.keys()) - set(["spectrum", "_id"])
             metadata = {k : doc[k] for k in metadata_keys}
-            common = {"element" : {"symbol" : metadata["absorbing_atom"], "edge" : metadata["EDGE"]}}
+            common = {"element" : {"symbol" : metadata["absorbing_atom"], "edge" : metadata["EDGE"]},
+                      "spec" : "feff"}
             metadata["common"] = common
 
             df = pd.DataFrame({
@@ -58,7 +59,11 @@ def main():
                 "chi" : sp["chi"]
                 })
 
-            doc_ = {"table" : serialize_parquet(df).tobytes(), "metadata" : metadata}
+            data = {"media_type" : "application/x-parquet",
+                    "structure_family" : "dataframe",
+                    "data_blob" : serialize_parquet(df).tobytes()}
+
+            doc_ = {"data" : data, "metadata" : metadata}
             c.insert_one(doc_)
     finally:
         db.drop_collection(c_import)

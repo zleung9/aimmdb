@@ -238,7 +238,10 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
 
 class MongoXASTree(MongoCollectionTree):
     def _build_dataset(self, doc):
-        df = deserialize_parquet(doc["table"])
+        data = doc["data"]
+        assert data["structure_family"] == "dataframe"
+        assert data["media_type"] == "application/x-parquet"
+        df = deserialize_parquet(data["data_blob"])
         metadata = doc["metadata"]
         return DataFrameAdapter.from_pandas(df, metadata=metadata, npartitions=1)
 

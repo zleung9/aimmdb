@@ -2,7 +2,7 @@
   "bsonType": "object",
   "required": [
     "metadata",
-    "table"
+    "data"
   ],
   "properties": {
     "metadata": {
@@ -14,7 +14,8 @@
         "common": {
           "bsonType": "object",
           "required": [
-            "element"
+            "element",
+            "spec"
           ],
           "properties": {
             "element": {
@@ -37,13 +38,28 @@
                   ]
                 }
               }
+            },
+            "spec" : {
+              "bsonType" : "string"
             }
           }
         }
       }
     },
-    "table": {
-      "bsonType": "binData"
+    "data": {
+      "bsonType": "object",
+      "required" : [
+        "media_type",
+        "structure_family"
+      ],
+      "properties" :  {
+        "media_type" : {
+          "bsonType" : "string"
+        },
+        "structure_family" : {
+          "bsonType" : "string"
+        }
+      }
     }
   }
 }
