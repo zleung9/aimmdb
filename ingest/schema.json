@@ -15,9 +15,13 @@
           "bsonType": "object",
           "required": [
             "element",
-            "spec"
+            "spec",
+            "uid"
           ],
           "properties": {
+            "uid" : {
+              "bsonType" : "string"
+            },
             "element": {
               "bsonType": "object",
               "required": [
@@ -39,8 +43,8 @@
                 }
               }
             },
-            "spec" : {
-              "bsonType" : "string"
+            "spec": {
+              "bsonType": "string"
             }
           }
         }
@@ -48,16 +52,31 @@
     },
     "data": {
       "bsonType": "object",
-      "required" : [
+      "required": [
         "media_type",
         "structure_family"
       ],
-      "properties" :  {
-        "media_type" : {
-          "bsonType" : "string"
+      "anyOf": [
+        {
+          "required": [
+            "blob"
+          ]
         },
-        "structure_family" : {
-          "bsonType" : "string"
+        {
+          "required": [
+            "reference"
+          ]
+        }
+      ],
+      "properties": {
+        "media_type": {
+          "bsonType": "string"
+        },
+        "structure_family": {
+          "bsonType": "string",
+          "enum": [
+            "dataframe"
+          ]
         }
       }
     }
