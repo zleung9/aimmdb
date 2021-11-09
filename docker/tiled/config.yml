@@ -13,6 +13,13 @@ trees:
       username: "root"
       password: ${MONGODB_PASSWORD}
       collection_name: "newville"
+  - path: /torrisi
+    tree: tree:MongoXASTree.from_uri
+    args:
+      uri: "mongodb://mongodb:27017/aimm?authSource=admin"
+      username: "root"
+      password: ${MONGODB_PASSWORD}
+      collection_name: "torrisi"
   - path: /wanli
     tree: tiled.trees.files:Tree.from_directory
     args:

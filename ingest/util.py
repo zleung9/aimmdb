@@ -7,16 +7,18 @@ import pyarrow.parquet as pq
 
 
 def serialize_parquet(df):
-  table = pa.Table.from_pandas(df)
-  sink = pa.BufferOutputStream()
-  pq.write_table(table, sink)
-  buf = sink.getvalue()
-  return memoryview(sink.getvalue())
+    table = pa.Table.from_pandas(df)
+    sink = pa.BufferOutputStream()
+    pq.write_table(table, sink)
+    buf = sink.getvalue()
+    return memoryview(sink.getvalue())
+
 
 def deserialize_parquet(data):
-  reader = pa.BufferReader(data)
-  table = pq.read_table(reader)
-  return table.to_pandas()
+    reader = pa.BufferReader(data)
+    table = pq.read_table(reader)
+    return table.to_pandas()
+
 
 def create_collection(db, collection, schema, overwrite=False):
     exists = collection in db.list_collection_names()
@@ -30,12 +32,13 @@ def create_collection(db, collection, schema, overwrite=False):
 
     db.create_collection(collection)
 
-    vexpr = {"$jsonSchema" : schema}
+    vexpr = {"$jsonSchema": schema}
 
-    cmd = OrderedDict([("collMod", "newville"),
-                       ("validator", vexpr),
-                       ("validationLevel", "strict")])
-
+    cmd = OrderedDict(
+        [("collMod", collection), ("validator", vexpr), ("validationLevel", "strict")]
+    )
     db.command(cmd)
+
+    db[collection].create_index("metadata.common.uid", unique=True)
 
     return db[collection]

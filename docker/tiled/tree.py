@@ -154,7 +154,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         return self._collection.count_documents(self._build_mongo_query())
 
     def __getitem__(self, key):
-        query = self._build_mongo_query({"_id" : ObjectId(key)})
+        query = self._build_mongo_query({"metadata.common.uid" : key})
         doc = self._collection.find_one(query)
         if doc is None:
             raise KeyError(key)
@@ -162,7 +162,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
 
     def __iter__(self):
         for doc in self._collection.find(self._build_mongo_query()):
-            yield str(doc["_id"])
+            yield str(doc["metadata"]["common"]["uid"])
 
     def authenticated_as(self, identity):
         if self._authenticated_identity is not None:
@@ -211,7 +211,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
             limit = None
 
         for doc in self._collection.find(self._build_mongo_query()).skip(skip).limit(limit):
-            _id = str(doc["_id"])
+            _id = str(doc["metadata"]["common"]["uid"])
             yield _id
 
 
@@ -224,7 +224,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
             limit = None
 
         for doc in self._collection.find(self._build_mongo_query()).skip(skip).limit(limit):
-            _id = str(doc["_id"])
+            _id = str(doc["metadata"]["common"]["uid"])
             dset = self._build_dataset(doc)
             yield (_id, dset)
 
@@ -232,13 +232,16 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         assert direction == 1, "direction=-1 should be handled by the client"
 
         doc = next(self._collection.find(self._build_mongo_query()).skip(index).limit(1))
-        _id = str(doc["_id"])
+        _id = str(doc["metadata"]["common"]["uid"])
         dset = self._build_dataset(doc)
         return (_id, dset)
 
 class MongoXASTree(MongoCollectionTree):
     def _build_dataset(self, doc):
-        df = deserialize_parquet(doc["table"])
+        data = doc["data"]
+        assert data["structure_family"] == "dataframe"
+        assert data["media_type"] == "application/x-parquet"
+        df = deserialize_parquet(data["blob"])
         metadata = doc["metadata"]
         return DataFrameAdapter.from_pandas(df, metadata=metadata, npartitions=1)
 
