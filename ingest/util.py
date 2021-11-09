@@ -39,4 +39,6 @@ def create_collection(db, collection, schema, overwrite=False):
     )
     db.command(cmd)
 
+    db[collection].create_index("metadata.common.uid", unique=True)
+
     return db[collection]
