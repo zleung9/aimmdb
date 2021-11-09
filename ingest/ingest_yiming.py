@@ -8,6 +8,8 @@ from collections import defaultdict
 
 import pandas as pd
 
+from tqdm import tqdm
+
 import pymongo
 from pymongo import MongoClient
 
@@ -62,6 +64,7 @@ def main():
     ]
     subprocess.run(cmd)
     c_import = db[f"{args.collection}_import"]
+    n = c_import.count_documents({})
 
     try:
         with open("schema.json") as f:
@@ -71,7 +74,8 @@ def main():
 
         counts = defaultdict(int)
 
-        for doc in c_import.find({}):
+        cursor = c_import.find({})
+        for doc in tqdm(cursor, total=n):
             sp = doc["spectrum"]
 
             metadata_keys = set(doc.keys()) - set(["spectrum", "_id"])

@@ -7,6 +7,8 @@ from collections import defaultdict
 
 from tiled.examples.xdi import read_xdi
 
+from tqdm import tqdm
+
 import pymongo
 from pymongo import MongoClient
 
@@ -42,7 +44,7 @@ def main():
 
     counts = defaultdict(int)
 
-    for f in files:
+    for f in tqdm(files):
         df, metadata = read_xdi(str(f))
         fields = metadata.pop("fields")
         metadata.update(**fields)
