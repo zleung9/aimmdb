@@ -32,12 +32,11 @@ def create_collection(db, collection, schema, overwrite=False):
 
     db.create_collection(collection)
 
-    vexpr = {"$jsonSchema" : schema}
+    vexpr = {"$jsonSchema": schema}
 
-    cmd = OrderedDict([("collMod", "newville"),
-                       ("validator", vexpr),
-                       ("validationLevel", "strict")])
-
+    cmd = OrderedDict(
+        [("collMod", collection), ("validator", vexpr), ("validationLevel", "strict")]
+    )
     db.command(cmd)
 
     return db[collection]
