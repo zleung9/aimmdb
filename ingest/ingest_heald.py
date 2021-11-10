@@ -58,7 +58,7 @@ def main():
         else:
             df = n.read()
             metadata = dict(**n.metadata)
-            uid = "/".join(p)
+            uid = "-".join(p)
             print(f"{i}: {uid=}")
             i += 1
 
