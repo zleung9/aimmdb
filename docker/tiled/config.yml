@@ -49,6 +49,7 @@ uvicorn:
   proxy-headers: true
   forwarded-allow-ips: "*"
 authentication:
+  allow_anonymous_access: true
   authenticator: tiled.authenticators:OIDCAuthenticator
   args:
     client_id: ${ORCID_CLIENT_ID}
@@ -67,7 +68,6 @@ authentication:
 access_control:
   # Unauthenticated users can see some public datasets, but
   # not everything.
-  allow_anonymous_access: true
   access_policy: tiled.trees.in_memory:SimpleAccessPolicy
   args:
     access_lists:
