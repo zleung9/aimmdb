@@ -65,6 +65,9 @@ authentication:
     authorization_endpoint: https://orcid.org/oauth/authorize?client_id={client_id}&response_type=code&scope=openid&redirect_uri={redirect_uri}
     confirmation_message: You have logged with ORCID.
 access_control:
+  # Unauthenticated users can see some public datasets, but
+  # not everything.
+  allow_anonymous_access: true
   access_policy: tiled.trees.in_memory:SimpleAccessPolicy
   args:
     access_lists:
@@ -73,3 +76,4 @@ access_control:
       0000-0003-3670-0431: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Joe sees all
       0000-0002-1539-0297: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Dylan sees all
       0000-0002-3337-2930: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Eli sees all
+    public: ["newville"]
