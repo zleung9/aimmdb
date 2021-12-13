@@ -77,4 +77,7 @@ access_control:
       0000-0002-1539-0297: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Dylan sees all
       0000-0002-3337-2930: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Eli sees all
       0000-0002-5269-0125: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Alex sees all
+      0000-0003-4351-6085: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Deyu sees all
+      0000-0003-0666-8063: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Wanli sees all
+      0000-0001-5266-5408: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Zhu sees all
     public: ["newville"]
