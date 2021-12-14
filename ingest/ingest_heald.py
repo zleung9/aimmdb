@@ -61,9 +61,10 @@ def main():
             uid = "-".join(p)
             print(f"{i}: {uid=}")
             i += 1
+            element = metadata["common"]["element"]
 
             common = {
-                "element": {"symbol": None, "edge": None},
+                "element": element,
                 "spec": "heald",
                 "uid": uid,
             }
