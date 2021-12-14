@@ -80,4 +80,5 @@ access_control:
       0000-0001-5266-5408: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Zhu sees all
       0000-0002-2473-0193: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Juan sees all
       0000-0003-0922-1363: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Maria sees all
+      0000-0002-5181-9513: tiled.trees.in_memory:SimpleAccessPolicy.ALL  # Matt sees all
     public: ["newville"]
