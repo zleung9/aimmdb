@@ -35,14 +35,12 @@ trees:
       password: ${MONGODB_PASSWORD}
       collection_name: "heald_unnormalized"
   - path: /wanli
-    tree: tiled.trees.files:Tree.from_directory
+    tree: tree:MongoXASTree.from_uri
     args:
-      directory: /data/wanli-cleaned
-      poll_interval: 0
-  - path: /chengjun
-    tree: aimm_adapters.heald_labview:RIXSImagesAndTable.from_directory
-    args:
-      directory: /data/chengjun/tiff_seq_test/files
+      uri: "mongodb://mongodb:27017/aimm?authSource=admin"
+      username: "root"
+      password: ${MONGODB_PASSWORD}
+      collection_name: "wanli"
 uvicorn:
   host: 0.0.0.0
   port: 8000
