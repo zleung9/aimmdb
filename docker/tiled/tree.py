@@ -1,11 +1,18 @@
 import sys
 
+import base64
 import dask.array
 import dask.dataframe
 import numpy as np
 import pandas as pd
 import uuid
 import itertools
+
+import ariadne
+from ariadne import ObjectType, QueryType, gql, make_executable_schema
+from ariadne.asgi import GraphQL
+
+from fastapi import APIRouter, Request, Depends
 
 import json
 
@@ -19,14 +26,13 @@ import collections.abc
 
 from dataclasses import dataclass
 
-from tiled.utils import import_object, DictView
-from tiled.trees.utils import IndexersMixin, UNCHANGED
-from tiled.readers.dataframe import DataFrameAdapter
+from tiled.utils import import_object, DictView, UNCHANGED
+from tiled.adapters.utils import IndexersMixin
+from tiled.adapters.dataframe import DataFrameAdapter
+from tiled.adapters.mapping import MapAdapter as Tree
+from tiled.server.authentication import get_current_user
 
 from tiled.query_registration import QueryTranslationRegistry, register
-
-from tiled.trees.in_memory import Tree
-from tiled.readers.dataframe import DataFrameAdapter
 
 def deserialize_parquet(data):
   reader = pa.BufferReader(data)
@@ -69,6 +75,8 @@ def _get_database(uri, username, password):
 
 class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
 
+    structure_family = "node"
+
     # Define classmethods for managing what queries this Tree knows.
     query_registry = QueryTranslationRegistry()
     register_query = query_registry.register
@@ -95,7 +103,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
                    access_policy=access_policy,
                    authenticated_identity=authenticated_identity)
 
-    def __init__(self, 
+    def __init__(self,
             collection,
             metadata=None,
             access_policy=None,
@@ -117,6 +125,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         self._authenticated_identity = authenticated_identity
 
         self._queries = list(queries or [])
+
 
         super().__init__()
 
@@ -237,6 +246,89 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         return (_id, dset)
 
 class MongoXASTree(MongoCollectionTree):
+    def __init__(self,
+            collection,
+            metadata=None,
+            access_policy=None,
+            authenticated_identity=None,
+            queries=None):
+
+        super().__init__(collection, metadata, access_policy, authenticated_identity, queries)
+
+        type_defs = gql("""
+            type Query {
+                spectra(symbol: String, edge: String, offset: Int, limit: Int): [spectrum]
+            }
+
+            type spectrum_metadata {
+                uid: String!
+                symbol: String!
+                edge: String!
+            }
+
+            type spectrum {
+                metadata: spectrum_metadata!
+                data: String!
+            }
+        """)
+
+        query = QueryType()
+        spectrum = ObjectType("spectrum")
+        spectrum_metadata = ObjectType("spectrum_metadata")
+
+        @query.field("spectra")
+        def resolve_xas_spectrum(obj, info, symbol=None, edge=None, offset=0, limit=50):
+            query = {}
+            if symbol:
+                query["metadata.common.element.symbol"] = symbol
+            if edge:
+                query["metadata.common.element.edge"] = edge
+
+            return [doc for doc in self._collection.find(query).skip(offset).limit(limit)]
+
+        @spectrum.field("data")
+        def resolve_data(obj, info):
+            data = obj["data"]
+            blob_base64 = base64.b64encode(data["blob"]).decode("utf-8")
+            return blob_base64
+
+        @spectrum.field("metadata")
+        def resolve_metadata(obj, info):
+            return obj["metadata"]
+
+        @spectrum_metadata.field("uid")
+        def resolve_uid(obj, info):
+            return obj["common"]["uid"]
+
+        @spectrum_metadata.field("symbol")
+        def resolve_symbol(obj, info):
+            return obj["common"]["element"]["symbol"]
+
+        @spectrum_metadata.field("edge")
+        def resolve_edge(obj, info):
+            return obj["common"]["element"]["edge"]
+
+        # TODO can this be extended or does it have to be constructed at the beginning
+        # define graphql endpoint to do approximately the same thing as /node/search
+        schema = make_executable_schema(type_defs, query, spectrum, spectrum_metadata)
+        graphql = GraphQL(schema, debug=True)
+
+        router = APIRouter()
+
+        # FIXME how to deal with multiple trees
+        # TODO implement metadata search through the graphql endpoint
+        @router.get("/graphql")
+        async def graphiql(request: Request, user: str = Depends(get_current_user)):
+            #FIXME how should authorization work from the playground app?
+            #use {"x-tiled-api-key" : "key"} in HTTP Headers section of interface
+            return await graphql.render_playground(request=request)
+
+        @router.post("/graphql")
+        async def graphql_post(request: Request, user: str = Depends(get_current_user)):
+            return await graphql.graphql_http_server(request=request)
+
+        self.include_routers = [router]
+
     def _build_dataset(self, doc):
         data = doc["data"]
         assert data["structure_family"] == "dataframe"

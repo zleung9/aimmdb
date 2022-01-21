@@ -1,0 +1,8 @@
+trees:
+  - path: /newville
+    tree: tree:MongoXASTree.from_uri
+    args:
+      uri: ${MONGODB_URI}
+      username: "root"
+      password: ${MONGODB_PASSWORD}
+      collection_name: "newville"
