@@ -39,7 +39,6 @@ def create_collection(db, collection, schema, overwrite=False):
     )
     db.command(cmd)
 
-    db[collection].create_index("uid", unique=True)
     db[collection].create_index("ancestors")
     db[collection].create_index("parent")
     db[collection].create_index("content.metadata.common")

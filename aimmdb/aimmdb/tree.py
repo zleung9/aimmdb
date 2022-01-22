@@ -167,16 +167,20 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         return self._collection.count_documents(self._build_mongo_query())
 
     def __getitem__(self, key):
-        query = self._build_mongo_query({"uid" : key})
-        doc = self._collection.find_one(query)
-        if doc is None:
-            raise KeyError(key)
+        query = self._build_mongo_query({"name" : key})
+        docs = list(self._collection.find(query))
 
-        return self._build_node(doc)
+        if len(docs) == 0:
+            raise KeyError(f"{key} not found")
+
+        if len(docs) > 1:
+            raise KeyError(f"{key} matched multipled records")
+
+        return self._build_node(docs[0])
 
     def __iter__(self):
         for doc in self._collection.find(self._build_mongo_query()):
-            yield str(doc["uid"])
+            yield str(doc["name"])
 
     def authenticated_as(self, identity):
 # TODO understand if we should still have this code
@@ -230,7 +234,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
             limit = None
 
         for doc in self._collection.find(self._build_mongo_query()).skip(skip).limit(limit):
-            _id = str(doc["uid"])
+            _id = str(doc["name"])
             yield _id
 
 
@@ -243,7 +247,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
             limit = None
 
         for doc in self._collection.find(self._build_mongo_query()).skip(skip).limit(limit):
-            _id = str(doc["uid"])
+            _id = str(doc["name"])
             dset = self._build_node(doc)
             yield (_id, dset)
 
@@ -251,7 +255,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         assert direction == 1, "direction=-1 should be handled by the client"
 
         doc = next(self._collection.find(self._build_mongo_query()).skip(index).limit(1))
-        _id = str(doc["uid"])
+        _id = str(doc["name"])
         dset = self._build_node(doc)
         return (_id, dset)
 
@@ -272,7 +276,7 @@ class MongoXASTree(MongoCollectionTree):
             }
 
             type spectrum_metadata {
-                uid: String!
+                name: String!
                 symbol: String!
                 edge: String!
             }
@@ -307,9 +311,9 @@ class MongoXASTree(MongoCollectionTree):
         def resolve_metadata(obj, info):
             return obj["metadata"]
 
-        @spectrum_metadata.field("uid")
-        def resolve_uid(obj, info):
-            return obj["common"]["uid"]
+        @spectrum_metadata.field("name")
+        def resolve_name(obj, info):
+            return obj["name"]
 
         @spectrum_metadata.field("symbol")
         def resolve_symbol(obj, info):
@@ -352,7 +356,7 @@ class MongoXASTree(MongoCollectionTree):
         if doc["leaf"]:
             return self._build_dataset(doc)
         else:
-            return self.new_variation(parent=doc["uid"])
+            return self.new_variation(parent=doc["_id"])
 
 
 def run_raw_mongo_query(query, tree):

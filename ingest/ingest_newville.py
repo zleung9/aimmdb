@@ -20,8 +20,10 @@ def main():
     parser = argparse.ArgumentParser(description="ingest newville data")
     parser.add_argument(
         "--mongo_uri",
-        default="mongodb://root:example@localhost:27017/?authSource=admin",
+        default="mongodb://localhost:27017/?authSource=admin",
     )
+    parser.add_argument("--mongo_username", default="root")
+    parser.add_argument("--mongo_password", default="example")
     parser.add_argument("--db", default="aimm")
     parser.add_argument("--schema", default="schema.json")
     parser.add_argument("--collection", default="newville")
@@ -35,7 +37,7 @@ def main():
     files = list(path.rglob("*.xdi"))
     print(f"found {len(files)} xdi files to ingest")
 
-    client = MongoClient(args.mongo_uri)
+    client = MongoClient(args.mongo_uri, username=args.mongo_username, password=args.mongo_password)
     db = client[args.db]
 
     with open(args.schema) as f:
@@ -45,31 +47,28 @@ def main():
 
     counts = defaultdict(int)
 
-    dataset_uid = "newville"
-    specs = ["experiment"]
+    specs = ["experiment", "newville", "xas"]
 
-    doc = {"name" : "newville", "uid" : "newville_folder", "leaf" : False, "ancestors" : [], "parent" : None, "content" : None}
-    c.insert_one(doc)
+    doc = {"name" : "newville", "leaf" : False, "ancestors" : [], "parent" : None, "content" : None}
+    newville_id = c.insert_one(doc).inserted_id
 
     for f in tqdm(files):
         df, metadata = read_xdi(str(f))
         fields = metadata.pop("fields")
         metadata.update(**fields)
-        metadata["filename"] = f.name
 
         symbol = metadata["Element"]["symbol"]
         edge = metadata["Element"]["edge"]
 
-        uid_prefix = f"{symbol}-{edge}"
-        uid_suffix = str(counts[uid_prefix])
-        uid = f"{dataset_uid}-{uid_prefix}-{uid_suffix}"
-        counts[uid_prefix] += 1
+        name = f.stem
+        counts[name] += 1
+        if counts[name] > 1:
+            raise KeyError(f"name {name} is not unique")
 
         columns = list(df.columns)
         common = {
             "element": {"symbol": symbol, "edge": edge},
             "specs": specs,
-            "dataset_uid" : dataset_uid,
             "columns" : columns
         }
         metadata["common"] = common
@@ -81,7 +80,7 @@ def main():
         }
 
         content = {"data": data, "metadata": metadata}
-        doc = {"name" : f.name, "uid" : uid, "leaf" : True, "ancestors" : ["newville_folder"], "parent" : "newville_folder", "content" : content}
+        doc = {"name" : name, "leaf" : True, "ancestors" : [newville_id], "parent" : newville_id, "content" : content}
         c.insert_one(doc)
 
 if __name__ == "__main__":

@@ -1,7 +1,6 @@
 {
   "bsonType" : "object",
   "required" : [
-    "uid",
     "name",
     "leaf",
     "ancestors",
@@ -15,11 +14,11 @@
     "ancestors" : {
       "bsonType" : "array",
       "items" : {
-        "bsonType" : "string"
+        "bsonType" : "objectId"
       }
     },
     "parent" : {
-      "bsonType" : ["string", "null"]
+      "bsonType" : ["objectId", "null"]
     },
     "content" : {
         "bsonType": ["object", "null"],
@@ -39,13 +38,9 @@
                 "required": [
                   "element",
                   "specs",
-                  "columns",
-                  "dataset_uid"
+                  "columns"
                 ],
                 "properties": {
-                  "uid" : {
-                    "bsonType" : "string"
-                  },
                   "element": {
                     "bsonType": "object",
                     "required": [
@@ -72,9 +67,6 @@
                     "items" : {
                       "bsonType" : "string"
                     }
-                  },
-                  "dataset_uid" : {
-                    "bsonType" : "string"
                   },
                   "columns" : {
                     "bsonType" : "array",
