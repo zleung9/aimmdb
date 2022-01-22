@@ -3,7 +3,6 @@
 import argparse
 import pathlib
 import json
-from collections import defaultdict
 
 from tiled.examples.xdi import read_xdi
 
@@ -13,8 +12,6 @@ import pymongo
 from pymongo import MongoClient
 
 from util import serialize_parquet
-from util import create_collection
-
 
 def main():
     parser = argparse.ArgumentParser(description="ingest newville data")
@@ -39,18 +36,15 @@ def main():
 
     client = MongoClient(args.mongo_uri, username=args.mongo_username, password=args.mongo_password)
     db = client[args.db]
+    c = db[args.collection]
 
-    with open(args.schema) as f:
-        schema = json.load(f)
-
-    c = create_collection(db, args.collection, schema, overwrite=args.overwrite)
-
-    counts = defaultdict(int)
 
     specs = ["experiment", "newville", "xas"]
 
     doc = {"name" : "newville", "leaf" : False, "ancestors" : [], "parent" : None, "content" : None}
     newville_id = c.insert_one(doc).inserted_id
+
+    names = set()
 
     for f in tqdm(files):
         df, metadata = read_xdi(str(f))
@@ -61,9 +55,10 @@ def main():
         edge = metadata["Element"]["edge"]
 
         name = f.stem
-        counts[name] += 1
-        if counts[name] > 1:
+
+        if name in names:
             raise KeyError(f"name {name} is not unique")
+        names.add(name)
 
         columns = list(df.columns)
         common = {

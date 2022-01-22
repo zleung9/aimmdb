@@ -42,5 +42,6 @@ def create_collection(db, collection, schema, overwrite=False):
     db[collection].create_index("ancestors")
     db[collection].create_index("parent")
     db[collection].create_index("content.metadata.common")
+    db[collection].create_index([("name", pymongo.ASCENDING), ("parent", pymongo.ASCENDING)], unique=True)
 
     return db[collection]
