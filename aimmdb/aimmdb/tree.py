@@ -108,7 +108,8 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
             metadata=None,
             access_policy=None,
             authenticated_identity=None,
-            queries=None):
+            queries=None,
+            parent=None):
 
         self._collection = collection
 
@@ -125,6 +126,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         self._authenticated_identity = authenticated_identity
 
         self._queries = list(queries or [])
+        self._parent = parent
 
 
         super().__init__()
@@ -150,34 +152,38 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         return DictView(self._metadata)
 
     def _build_mongo_query(self, *queries):
-        combined = self._queries + list(queries)
+        combined = [{"parent" : self._parent}]
+        combined += self._queries
+        combined += list(queries)
         if combined:
             return {"$and": combined}
         else:
             return {}
 
-    def _build_dataset(self, doc):
+    def _build_node(self, doc):
         raise NotImplementedError
 
     def __len__(self):
         return self._collection.count_documents(self._build_mongo_query())
 
     def __getitem__(self, key):
-        query = self._build_mongo_query({"metadata.common.uid" : key})
+        query = self._build_mongo_query({"uid" : key})
         doc = self._collection.find_one(query)
         if doc is None:
             raise KeyError(key)
-        return self._build_dataset(doc)
+
+        return self._build_node(doc)
 
     def __iter__(self):
         for doc in self._collection.find(self._build_mongo_query()):
-            yield str(doc["metadata"]["common"]["uid"])
+            yield str(doc["uid"])
 
     def authenticated_as(self, identity):
-        if self._authenticated_identity is not None:
-            raise RuntimeError(
-                f"Already authenticated as {self.authenticated_identity}"
-            )
+# TODO understand if we should still have this code
+#        if self._authenticated_identity is not None:
+#            raise RuntimeError(
+#                f"Already authenticated as {self.authenticated_identity}"
+#            )
         if self._access_policy is not None:
             raise NotImplementedError
 
@@ -187,19 +193,23 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
     def new_variation(
         self,
         authenticated_identity=UNCHANGED,
-        queries=UNCHANGED
+        queries=UNCHANGED,
+        parent=UNCHANGED
     ):
         if authenticated_identity is UNCHANGED:
             authenticated_identity = self._authenticated_identity
         if queries is UNCHANGED:
             queries = self._queries
+        if parent is UNCHANGED:
+            parent = self._parent
 
         return type(self)(
             collection = self._collection,
             metadata = self._metadata,
             access_policy = self._access_policy,
             authenticated_identity = authenticated_identity,
-            queries = queries
+            queries = queries,
+            parent = parent
         )
 
     # The following three methods are used by IndexersMixin
@@ -220,7 +230,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
             limit = None
 
         for doc in self._collection.find(self._build_mongo_query()).skip(skip).limit(limit):
-            _id = str(doc["metadata"]["common"]["uid"])
+            _id = str(doc["uid"])
             yield _id
 
 
@@ -233,16 +243,16 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
             limit = None
 
         for doc in self._collection.find(self._build_mongo_query()).skip(skip).limit(limit):
-            _id = str(doc["metadata"]["common"]["uid"])
-            dset = self._build_dataset(doc)
+            _id = str(doc["uid"])
+            dset = self._build_node(doc)
             yield (_id, dset)
 
     def _item_by_index(self, index, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
 
         doc = next(self._collection.find(self._build_mongo_query()).skip(index).limit(1))
-        _id = str(doc["metadata"]["common"]["uid"])
-        dset = self._build_dataset(doc)
+        _id = str(doc["uid"])
+        dset = self._build_node(doc)
         return (_id, dset)
 
 class MongoXASTree(MongoCollectionTree):
@@ -251,9 +261,10 @@ class MongoXASTree(MongoCollectionTree):
             metadata=None,
             access_policy=None,
             authenticated_identity=None,
-            queries=None):
+            queries=None,
+            parent=None):
 
-        super().__init__(collection, metadata, access_policy, authenticated_identity, queries)
+        super().__init__(collection, metadata, access_policy, authenticated_identity, queries, parent)
 
         type_defs = gql("""
             type Query {
@@ -330,12 +341,19 @@ class MongoXASTree(MongoCollectionTree):
         self.include_routers = [router]
 
     def _build_dataset(self, doc):
-        data = doc["data"]
+        data = doc["content"]["data"]
         assert data["structure_family"] == "dataframe"
         assert data["media_type"] == "application/x-parquet"
         df = deserialize_parquet(data["blob"])
-        metadata = doc["metadata"]
+        metadata = doc["content"]["metadata"]
         return DataFrameAdapter.from_pandas(df, metadata=metadata, npartitions=1)
+
+    def _build_node(self, doc):
+        if doc["leaf"]:
+            return self._build_dataset(doc)
+        else:
+            return self.new_variation(parent=doc["uid"])
+
 
 def run_raw_mongo_query(query, tree):
     return tree.new_variation(
