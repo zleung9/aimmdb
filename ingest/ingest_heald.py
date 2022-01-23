@@ -15,72 +15,54 @@ from util import serialize_parquet
 from util import create_collection
 
 
-def walk(node, path, f):
-    for k, n in node.items():
-        child_path = path + [k]
-        f(n, child_path)
-        if type(n) is tiled.client.node.Node:
-            walk(n, child_path, f)
-
+def walk(client, node, name, path, ancestors):
+    print(f"{path=}")
+    if ancestors:
+        parent = ancestors[-1]
+    else:
+        parent = None
+    doc = {"name" : name, "parent" : parent, "ancestors" : ancestors}
+    if type(node) is tiled.client.node.Node:
+        doc.update(leaf=False, content=None)
+        id_ = client.insert_one(doc).inserted_id
+        for k, n in node.items():
+            walk(client, n, k, path + [k], ancestors + [id_])
+    else:
+        df = node.read()
+        metadata = dict(**node.metadata)
+        specs = ["experiment", "heald", "xas"]
+        metadata["common"].update(specs = specs, columns = list(df.columns))
+        data = {
+            "media_type": "application/x-parquet",
+            "structure_family": "dataframe",
+            "blob": serialize_parquet(df).tobytes(),
+        }
+        doc.update(leaf=True, content={"data" : data, "metadata" : metadata})
+        client.insert_one(doc)
 
 def main():
     parser = argparse.ArgumentParser(description="ingest heald data")
     parser.add_argument(
         "--mongo_uri",
-        default="mongodb://root:example@localhost:27017/?authSource=admin",
+        default="mongodb://localhost:27017/?authSource=admin",
     )
+    parser.add_argument("--mongo_username", default="root")
+    parser.add_argument("--mongo_password", default="example")
     parser.add_argument("--db", default="aimm")
-    parser.add_argument("--collection", default="heald")
-    parser.add_argument("--overwrite", action="store_true")
-    parser.add_argument("--subpath", default="normalized")
+    parser.add_argument("--collection", default="spike")
+    parser.add_argument("--subpath", default="heald")
     parser.add_argument("uri")
 
     args = parser.parse_args()
 
-    client = from_uri(args.uri)
-    root = client[args.subpath]
+    tiled_client = from_uri(args.uri)
+    tiled_root = tiled_client[args.subpath]
 
-    client = MongoClient(args.mongo_uri)
+    client = MongoClient(args.mongo_uri, username=args.mongo_username, password=args.mongo_password)
     db = client[args.db]
+    c = db[args.collection]
 
-    with open("schema.json") as f:
-        schema = json.load(f)
-
-    collection_name = f"{args.collection}_{args.subpath}"
-    c = create_collection(db, collection_name, schema, overwrite=args.overwrite)
-
-    i = 0
-
-    def visitor(n, p):
-        nonlocal i
-        if type(n) is tiled.client.node.Node:
-            pass
-        else:
-            df = n.read()
-            metadata = dict(**n.metadata)
-            uid = "-".join(p)
-            print(f"{i}: {uid=}")
-            i += 1
-            element = metadata["common"]["element"]
-
-            common = {
-                "element": element,
-                "spec": "heald",
-                "uid": uid,
-            }
-            metadata["common"] = common
-
-            data = {
-                "media_type": "application/x-parquet",
-                "structure_family": "dataframe",
-                "blob": serialize_parquet(df).tobytes(),
-            }
-
-            doc = {"data": data, "metadata": metadata}
-            c.insert_one(doc)
-
-    walk(root, [], visitor)
-
+    walk(c, tiled_root, "heald", [], [])
 
 if __name__ == "__main__":
     main()

@@ -22,9 +22,7 @@ def main():
     parser.add_argument("--mongo_username", default="root")
     parser.add_argument("--mongo_password", default="example")
     parser.add_argument("--db", default="aimm")
-    parser.add_argument("--schema", default="schema.json")
-    parser.add_argument("--collection", default="newville")
-    parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--collection", default="spike")
     parser.add_argument("data_path")
 
     args = parser.parse_args()
@@ -38,13 +36,10 @@ def main():
     db = client[args.db]
     c = db[args.collection]
 
-
     specs = ["experiment", "newville", "xas"]
 
     doc = {"name" : "newville", "leaf" : False, "ancestors" : [], "parent" : None, "content" : None}
     newville_id = c.insert_one(doc).inserted_id
-
-    names = set()
 
     for f in tqdm(files):
         df, metadata = read_xdi(str(f))
@@ -55,10 +50,6 @@ def main():
         edge = metadata["Element"]["edge"]
 
         name = f.stem
-
-        if name in names:
-            raise KeyError(f"name {name} is not unique")
-        names.add(name)
 
         columns = list(df.columns)
         common = {
