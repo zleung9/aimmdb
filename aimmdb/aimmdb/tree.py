@@ -272,18 +272,19 @@ class MongoXASTree(MongoCollectionTree):
 
         type_defs = gql("""
             type Query {
-                spectra(symbol: String, edge: String, offset: Int, limit: Int): [spectrum]
+                spectra(symbol: String, edge: String, specs: [String], offset: Int, limit: Int): [spectrum]
             }
 
             type spectrum_metadata {
-                name: String!
                 symbol: String!
                 edge: String!
+                specs: [String]!
             }
 
             type spectrum {
-                metadata: spectrum_metadata!
+                name: String!
                 data: String!
+                metadata: spectrum_metadata!
             }
         """)
 
@@ -292,28 +293,29 @@ class MongoXASTree(MongoCollectionTree):
         spectrum_metadata = ObjectType("spectrum_metadata")
 
         @query.field("spectra")
-        def resolve_xas_spectrum(obj, info, symbol=None, edge=None, offset=0, limit=50):
-            query = {}
+        def resolve_xas_spectrum(obj, info, symbol=None, edge=None, specs=None, offset=0, limit=50):
+            query = {"leaf" : True}
             if symbol:
-                query["metadata.common.element.symbol"] = symbol
+                query["content.metadata.common.element.symbol"] = symbol
             if edge:
-                query["metadata.common.element.edge"] = edge
-
+                query["content.metadata.common.element.edge"] = edge
+            if specs:
+                query["content.metadata.common.specs"] = {"$all" : specs}
             return [doc for doc in self._collection.find(query).skip(offset).limit(limit)]
+
+        @spectrum.field("name")
+        def resolve_name(obj, info):
+            return obj["name"]
 
         @spectrum.field("data")
         def resolve_data(obj, info):
-            data = obj["data"]
+            data = obj["content"]["data"]
             blob_base64 = base64.b64encode(data["blob"]).decode("utf-8")
             return blob_base64
 
         @spectrum.field("metadata")
         def resolve_metadata(obj, info):
-            return obj["metadata"]
-
-        @spectrum_metadata.field("name")
-        def resolve_name(obj, info):
-            return obj["name"]
+            return obj["content"]["metadata"]
 
         @spectrum_metadata.field("symbol")
         def resolve_symbol(obj, info):
@@ -322,6 +324,10 @@ class MongoXASTree(MongoCollectionTree):
         @spectrum_metadata.field("edge")
         def resolve_edge(obj, info):
             return obj["common"]["element"]["edge"]
+
+        @spectrum_metadata.field("specs")
+        def resolve_edge(obj, info):
+            return obj["common"]["specs"]
 
         # TODO can this be extended or does it have to be constructed at the beginning
         # define graphql endpoint to do approximately the same thing as /node/search
