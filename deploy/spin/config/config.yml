@@ -1,0 +1,15 @@
+trees:
+  - path: /
+    tree: aimmdb.tree:MongoXASTree.from_uri
+    args:
+      uri: ${MONGO_URI}
+      username: root
+      password: ${MONGO_PASSWORD}
+      collection_name: "spike"
+authentication:
+  allow_anonymous_access: false
+  single_user_api_key: e8efa928cbf022b2e99d6002ec2b9801
+uvicorn:
+  host: 0.0.0.0
+  port: 8000
+  proxy-headers: true

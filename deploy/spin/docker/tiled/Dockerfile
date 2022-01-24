@@ -1,8 +1,13 @@
 FROM ghcr.io/bluesky/tiled:main as base
 
-COPY gunicorn_config.py tree.py requirements.txt entrypoint.sh /deploy/
-COPY config.yml /deploy/config/
-ENV TILED_CONFIG=/deploy/config
-RUN pip install -r requirements.txt
+FROM base as builder
+
+WORKDIR /build
+COPY aimmdb .
+RUN pip install .
+
+FROM base as app
+COPY --from=builder $VIRTUAL_ENV $VIRTUAL_ENV
+COPY deploy/spin/docker/tiled/gunicorn_config.py /deploy/spin/docker/tiled/entrypoint.sh .
 
 ENTRYPOINT ["/deploy/entrypoint.sh"]
