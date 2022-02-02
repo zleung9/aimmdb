@@ -30,7 +30,7 @@ from tiled.utils import import_object, DictView, UNCHANGED
 from tiled.adapters.utils import IndexersMixin
 from tiled.adapters.dataframe import DataFrameAdapter
 from tiled.adapters.mapping import MapAdapter as Tree
-from tiled.server.authentication import get_current_user
+from tiled.server.authentication import get_current_principal
 
 from tiled.query_registration import QueryTranslationRegistry, register
 
@@ -339,13 +339,13 @@ class MongoXASTree(MongoCollectionTree):
         # FIXME how to deal with multiple trees
         # TODO implement metadata search through the graphql endpoint
         @router.get("/graphql")
-        async def graphiql(request: Request, user: str = Depends(get_current_user)):
+        async def graphiql(request: Request, user: str = Depends(get_current_principal)):
             #FIXME how should authorization work from the playground app?
             #use {"x-tiled-api-key" : "key"} in HTTP Headers section of interface
             return await graphql.render_playground(request=request)
 
         @router.post("/graphql")
-        async def graphql_post(request: Request, user: str = Depends(get_current_user)):
+        async def graphql_post(request: Request, user: str = Depends(get_current_principal)):
             return await graphql.graphql_http_server(request=request)
 
         self.include_routers = [router]
