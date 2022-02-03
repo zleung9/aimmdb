@@ -1,3 +1,4 @@
+import io
 import sys
 
 import base64
@@ -21,6 +22,8 @@ from bson.objectid import ObjectId
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+import h5py
 
 import collections.abc
 
@@ -364,6 +367,11 @@ class MongoXASTree(MongoCollectionTree):
         else:
             return self.new_variation(parent=doc["_id"])
 
+    def read(self, fields=None):
+        if fields is not None:
+            raise NotImplementedError
+        return self
+
 
 def run_raw_mongo_query(query, tree):
     return tree.new_variation(
@@ -378,3 +386,31 @@ def run_element_query(query, tree):
 
 MongoXASTree.register_query(RawMongoQuery, run_raw_mongo_query)
 MongoXASTree.register_query(ElementQuery, run_element_query)
+
+def walk(node, pre=None):
+    pre = pre[:] if pre else []
+
+    if isinstance(node, MongoXASTree):
+        for k, v in node.items():
+            yield from walk(v, pre + [k])
+        if node.metadata:
+            yield from walk(node.metadata, pre + ["_metadata"])
+    elif isinstance(node, collections.abc.Mapping):
+        for k, v in node.items():
+            yield from walk(v, pre + [k])
+    elif isinstance(node, DataFrameAdapter):
+        df = node.read()
+        yield (df.to_numpy(), pre + ["_data"])
+        if node.metadata:
+            yield from walk(node.metadata, pre + ["_metadata"])
+    else:
+        yield (node, pre)
+
+def serialize_hdf5(node, metadata):
+    buffer = io.BytesIO()
+    with h5py.File(buffer, mode="w") as file:
+        for (x, pre) in walk(node):
+            path = "/".join(pre)
+            file[path] = x
+
+    return buffer.getbuffer()

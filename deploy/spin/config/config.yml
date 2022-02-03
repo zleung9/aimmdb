@@ -1,6 +1,6 @@
 trees:
   - path: /
-    tree: aimmdb.tree:MongoXASTree.from_uri
+    tree: aimmdb:MongoXASTree.from_uri
     args:
       uri: ${MONGO_URI}
       username: root
@@ -13,3 +13,6 @@ uvicorn:
   host: 0.0.0.0
   port: 8000
   proxy-headers: true
+media_types:
+  node:
+    application/x-hdf5: aimmdb:serialize_hdf5
