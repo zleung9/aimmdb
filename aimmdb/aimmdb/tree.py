@@ -411,6 +411,9 @@ def serialize_hdf5(node, metadata):
     with h5py.File(buffer, mode="w") as file:
         for (x, pre) in walk(node):
             path = "/".join(pre)
-            file[path] = x
+            if x is not None:
+                file[path] = x
+            else:
+                file[path] = h5py.Empty("f")
 
     return buffer.getbuffer()
