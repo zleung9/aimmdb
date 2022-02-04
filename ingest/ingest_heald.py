@@ -30,8 +30,6 @@ def walk(client, node, name, path, ancestors):
     else:
         df = node.read()
         metadata = dict(**node.metadata)
-        specs = ["experiment", "heald", "xas"]
-        metadata["common"].update(specs = specs, columns = list(df.columns))
         data = {
             "media_type": "application/x-parquet",
             "structure_family": "dataframe",
@@ -50,13 +48,11 @@ def main():
     parser.add_argument("--mongo_password", default="example")
     parser.add_argument("--db", default="aimm")
     parser.add_argument("--collection", default="spike")
-    parser.add_argument("--subpath", default="heald")
     parser.add_argument("uri")
 
     args = parser.parse_args()
 
-    tiled_client = from_uri(args.uri)
-    tiled_root = tiled_client[args.subpath]
+    tiled_root = from_uri(args.uri)
 
     client = MongoClient(args.mongo_uri, username=args.mongo_username, password=args.mongo_password)
     db = client[args.db]
