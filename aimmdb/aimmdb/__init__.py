@@ -1,1 +1,1 @@
-from .tree import MongoXASTree, serialize_hdf5
+from .tree import AIMMTree, serialize_hdf5

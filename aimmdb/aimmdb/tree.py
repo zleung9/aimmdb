@@ -1,46 +1,41 @@
-import io
-import sys
-
 import base64
-import dask.array
-import dask.dataframe
-import numpy as np
-import pandas as pd
-import uuid
-import itertools
-
-import ariadne
-from ariadne import ObjectType, QueryType, gql, make_executable_schema
-from ariadne.asgi import GraphQL
-
-from fastapi import APIRouter, Request, Depends
-
-import json
-
-import pymongo
-from bson.objectid import ObjectId
-
-import pyarrow as pa
-import pyarrow.parquet as pq
-
-import h5py
-
 import collections.abc
-
+import io
+import itertools
+import json
+import sys
+import uuid
 from dataclasses import dataclass
 
-from tiled.utils import import_object, DictView, UNCHANGED
-from tiled.adapters.utils import IndexersMixin
+import ariadne
+import dask.array
+import dask.dataframe
+import h5py
+import numpy as np
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+import pymongo
+import xarray
+from ariadne import ObjectType, QueryType, gql, make_executable_schema
+from ariadne.asgi import GraphQL
+from bson.objectid import ObjectId
+from fastapi import APIRouter, Depends, Request
+from tiled.adapters.array import ArrayAdapter
 from tiled.adapters.dataframe import DataFrameAdapter
-from tiled.adapters.mapping import MapAdapter as Tree
-from tiled.server.authentication import get_current_principal
-
+from tiled.adapters.mapping import MapAdapter
+from tiled.adapters.utils import IndexersMixin
+from tiled.adapters.xarray import DataArrayAdapter
 from tiled.query_registration import QueryTranslationRegistry, register
+from tiled.server.authentication import get_current_principal
+from tiled.utils import UNCHANGED, DictView, import_object
+
 
 def deserialize_parquet(data):
-  reader = pa.BufferReader(data)
-  table = pq.read_table(reader)
-  return table.to_pandas()
+    reader = pa.BufferReader(data)
+    table = pq.read_table(reader)
+    return table.to_pandas()
+
 
 @register(name="raw_mongo")
 @dataclass
@@ -56,16 +51,6 @@ class RawMongoQuery:
             query = json.dumps(query)
         self.query = query
 
-@register(name="element")
-@dataclass
-class ElementQuery:
-
-    symbol: str
-    edge: str
-
-    def __init__(self, symbol, edge):
-        self.symbol = symbol
-        self.edge = edge
 
 def _get_database(uri, username, password):
     if not pymongo.uri_parser.parse_uri(uri)["database"]:
@@ -75,6 +60,7 @@ def _get_database(uri, username, password):
     else:
         client = pymongo.MongoClient(uri, username=username, password=password)
         return client.get_database()
+
 
 class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
 
@@ -96,23 +82,27 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         metadata=None,
         access_policy=None,
         authenticated_identity=None,
-        ):
+    ):
 
         db = _get_database(uri, username, password)
         collection = db.get_collection(collection_name)
 
-        return cls(collection,
-                   metadata=metadata,
-                   access_policy=access_policy,
-                   authenticated_identity=authenticated_identity)
-
-    def __init__(self,
+        return cls(
             collection,
-            metadata=None,
-            access_policy=None,
-            authenticated_identity=None,
-            queries=None,
-            parent=None):
+            metadata=metadata,
+            access_policy=access_policy,
+            authenticated_identity=authenticated_identity,
+        )
+
+    def __init__(
+        self,
+        collection,
+        metadata=None,
+        access_policy=None,
+        authenticated_identity=None,
+        queries=None,
+        path="/",
+    ):
 
         self._collection = collection
 
@@ -129,8 +119,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         self._authenticated_identity = authenticated_identity
 
         self._queries = list(queries or [])
-        self._parent = parent
-
+        self._path = path
 
         super().__init__()
 
@@ -155,7 +144,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         return DictView(self._metadata)
 
     def _build_mongo_query(self, *queries):
-        combined = [{"parent" : self._parent}]
+        combined = [{"path": {"$regex": f"^{self._path}[^/]*$"}}]
         combined += self._queries
         combined += list(queries)
         if combined:
@@ -170,7 +159,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         return self._collection.count_documents(self._build_mongo_query())
 
     def __getitem__(self, key):
-        query = self._build_mongo_query({"name" : key})
+        query = self._build_mongo_query({"name": key})
         docs = list(self._collection.find(query))
 
         if len(docs) == 0:
@@ -182,15 +171,15 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         return self._build_node(docs[0])
 
     def __iter__(self):
-        for doc in self._collection.find(self._build_mongo_query()):
+        for doc in self._collection.find(self._build_mongo_query(), {"name": 1}):
             yield str(doc["name"])
 
     def authenticated_as(self, identity):
-# TODO understand if we should still have this code
-#        if self._authenticated_identity is not None:
-#            raise RuntimeError(
-#                f"Already authenticated as {self.authenticated_identity}"
-#            )
+        # TODO understand if we should still have this code
+        #        if self._authenticated_identity is not None:
+        #            raise RuntimeError(
+        #                f"Already authenticated as {self.authenticated_identity}"
+        #            )
         if self._access_policy is not None:
             raise NotImplementedError
 
@@ -198,25 +187,22 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         return tree
 
     def new_variation(
-        self,
-        authenticated_identity=UNCHANGED,
-        queries=UNCHANGED,
-        parent=UNCHANGED
+        self, authenticated_identity=UNCHANGED, queries=UNCHANGED, path=UNCHANGED
     ):
         if authenticated_identity is UNCHANGED:
             authenticated_identity = self._authenticated_identity
         if queries is UNCHANGED:
             queries = self._queries
-        if parent is UNCHANGED:
-            parent = self._parent
+        if path is UNCHANGED:
+            path = self._path
 
         return type(self)(
-            collection = self._collection,
-            metadata = self._metadata,
-            access_policy = self._access_policy,
-            authenticated_identity = authenticated_identity,
-            queries = queries,
-            parent = parent
+            collection=self._collection,
+            metadata=self._metadata,
+            access_policy=self._access_policy,
+            authenticated_identity=authenticated_identity,
+            queries=queries,
+            path=path,
         )
 
     # The following three methods are used by IndexersMixin
@@ -226,6 +212,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         """
         Return a Tree with a subset of the mapping.
         """
+        print(f"{query=}")
         return self.query_registry(query, self)
 
     def _keys_slice(self, start, stop, direction):
@@ -236,10 +223,10 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         else:
             limit = None
 
-        for doc in self._collection.find(self._build_mongo_query()).skip(skip).limit(limit):
-            _id = str(doc["name"])
-            yield _id
-
+        query = self._build_mongo_query()
+        for doc in self._collection.find(query, {"name": 1}).skip(skip).limit(limit):
+            k = str(doc["name"])
+            yield k
 
     def _items_slice(self, start, stop, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
@@ -249,123 +236,64 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         else:
             limit = None
 
-        for doc in self._collection.find(self._build_mongo_query()).skip(skip).limit(limit):
-            _id = str(doc["name"])
+        # FIXME don't load full document with all the data here
+        for doc in (
+            self._collection.find(self._build_mongo_query()).skip(skip).limit(limit)
+        ):
+            k = str(doc["name"])
             dset = self._build_node(doc)
-            yield (_id, dset)
+            yield (k, dset)
 
     def _item_by_index(self, index, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
 
-        doc = next(self._collection.find(self._build_mongo_query()).skip(index).limit(1))
-        _id = str(doc["name"])
+        doc = next(
+            self._collection.find(self._build_mongo_query()).skip(index).limit(1)
+        )
+        k = str(doc["name"])
         dset = self._build_node(doc)
-        return (_id, dset)
+        return (k, dset)
 
-class MongoXASTree(MongoCollectionTree):
-    def __init__(self,
-            collection,
-            metadata=None,
-            access_policy=None,
-            authenticated_identity=None,
-            queries=None,
-            parent=None):
 
-        super().__init__(collection, metadata, access_policy, authenticated_identity, queries, parent)
+class AIMMTree(MongoCollectionTree):
+    def __init__(
+        self,
+        collection,
+        metadata=None,
+        access_policy=None,
+        authenticated_identity=None,
+        queries=None,
+        path="/",
+    ):
 
-        type_defs = gql("""
-            type Query {
-                spectra(symbol: String, edge: String, specs: [String], offset: Int, limit: Int): [spectrum]
-            }
-
-            type spectrum_metadata {
-                symbol: String!
-                edge: String!
-                specs: [String]!
-            }
-
-            type spectrum {
-                name: String!
-                data: String!
-                metadata: spectrum_metadata!
-            }
-        """)
-
-        query = QueryType()
-        spectrum = ObjectType("spectrum")
-        spectrum_metadata = ObjectType("spectrum_metadata")
-
-        @query.field("spectra")
-        def resolve_xas_spectrum(obj, info, symbol=None, edge=None, specs=None, offset=0, limit=50):
-            query = {"leaf" : True}
-            if symbol:
-                query["content.metadata.common.element.symbol"] = symbol
-            if edge:
-                query["content.metadata.common.element.edge"] = edge
-            if specs:
-                query["content.metadata.common.specs"] = {"$all" : specs}
-            return [doc for doc in self._collection.find(query).skip(offset).limit(limit)]
-
-        @spectrum.field("name")
-        def resolve_name(obj, info):
-            return obj["name"]
-
-        @spectrum.field("data")
-        def resolve_data(obj, info):
-            data = obj["content"]["data"]
-            blob_base64 = base64.b64encode(data["blob"]).decode("utf-8")
-            return blob_base64
-
-        @spectrum.field("metadata")
-        def resolve_metadata(obj, info):
-            return obj["content"]["metadata"]
-
-        @spectrum_metadata.field("symbol")
-        def resolve_symbol(obj, info):
-            return obj["common"]["element"]["symbol"]
-
-        @spectrum_metadata.field("edge")
-        def resolve_edge(obj, info):
-            return obj["common"]["element"]["edge"]
-
-        @spectrum_metadata.field("specs")
-        def resolve_edge(obj, info):
-            return obj["common"]["specs"]
-
-        # TODO can this be extended or does it have to be constructed at the beginning
-        # define graphql endpoint to do approximately the same thing as /node/search
-        schema = make_executable_schema(type_defs, query, spectrum, spectrum_metadata)
-        graphql = GraphQL(schema, debug=True)
-
-        router = APIRouter()
-
-        # FIXME how to deal with multiple trees
-        # TODO implement metadata search through the graphql endpoint
-        @router.get("/graphql")
-        async def graphiql(request: Request, user: str = Depends(get_current_principal)):
-            #FIXME how should authorization work from the playground app?
-            #use {"x-tiled-api-key" : "key"} in HTTP Headers section of interface
-            return await graphql.render_playground(request=request)
-
-        @router.post("/graphql")
-        async def graphql_post(request: Request, user: str = Depends(get_current_principal)):
-            return await graphql.graphql_http_server(request=request)
-
-        self.include_routers = [router]
+        super().__init__(
+            collection, metadata, access_policy, authenticated_identity, queries, path
+        )
 
     def _build_dataset(self, doc):
-        data = doc["content"]["data"]
-        assert data["structure_family"] == "dataframe"
-        assert data["media_type"] == "application/x-parquet"
-        df = deserialize_parquet(data["blob"])
-        metadata = doc["content"]["metadata"]
-        return DataFrameAdapter.from_pandas(df, metadata=metadata, npartitions=1)
+
+        metadata = doc["metadata"]
+
+        # FIXME use tiled.utils.OneShotCachedMap to make lazy?
+        mapping = {}
+        for m in doc["measurements"]:
+            name = m["name"]
+            df = deserialize_parquet(m["data"]["blob"])
+            metadata = m["metadata"]
+            metadata["element"] = m["element"]
+
+            mapping[name] = DataFrameAdapter.from_pandas(
+                df, metadata=metadata, npartitions=1
+            )
+
+        return MapAdapter(mapping, metadata=doc["metadata"])
 
     def _build_node(self, doc):
-        if doc["leaf"]:
-            return self._build_dataset(doc)
+        if doc["folder"]:
+            name = doc["name"]
+            return self.new_variation(path=f"{self._path}{name}/")
         else:
-            return self.new_variation(parent=doc["_id"])
+            return self._build_dataset(doc)
 
     def read(self, fields=None):
         if fields is not None:
@@ -373,24 +301,18 @@ class MongoXASTree(MongoCollectionTree):
         return self
 
 
-def run_raw_mongo_query(query, tree):
-    return tree.new_variation(
-        queries=tree._queries + [json.loads(query.query)],
-    )
+# FIXME filtering needs to work differently since documents now contain multiple measurements
+# def run_raw_mongo_query(query, tree):
+#    query = json.loads(query.query)
+#    query = {"$or" : [{"folder" : True}, query]}
+#    return tree.new_variation(queries=tree._queries + [query])
+# AIMMTree.register_query(RawMongoQuery, run_raw_mongo_query)
 
-def run_element_query(query, tree):
-    results = tree.query_registry(
-            RawMongoQuery({"metadata.common.element.symbol" : query.symbol, "metadata.common.element.edge" : query.edge}),
-            tree)
-    return results
-
-MongoXASTree.register_query(RawMongoQuery, run_raw_mongo_query)
-MongoXASTree.register_query(ElementQuery, run_element_query)
 
 def walk(node, pre=None):
     pre = pre[:] if pre else []
 
-    if isinstance(node, MongoXASTree):
+    if isinstance(node, AIMMTree):
         for k, v in node.items():
             yield from walk(v, pre + [k])
         if node.metadata:
@@ -401,10 +323,12 @@ def walk(node, pre=None):
     elif isinstance(node, DataFrameAdapter):
         df = node.read()
         yield (df.to_numpy(), pre + ["_data"])
-        if node.metadata:
-            yield from walk(node.metadata, pre + ["_metadata"])
+        metadata = {**node.metadata}
+        metadata["columns"] = list(df.columns)
+        yield from walk(metadata, pre + ["_metadata"])
     else:
         yield (node, pre)
+
 
 def serialize_hdf5(node, metadata):
     buffer = io.BytesIO()

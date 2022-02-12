@@ -8,6 +8,7 @@ from pymongo import MongoClient
 
 from util import create_collection
 
+
 def main():
     parser = argparse.ArgumentParser(description="ingest newville data")
     parser.add_argument(
@@ -23,13 +24,16 @@ def main():
 
     args = parser.parse_args()
 
-    client = MongoClient(args.mongo_uri, username=args.mongo_username, password=args.mongo_password)
+    client = MongoClient(
+        args.mongo_uri, username=args.mongo_username, password=args.mongo_password
+    )
     db = client[args.db]
 
     with open(args.schema) as f:
         schema = json.load(f)
 
     c = create_collection(db, args.collection, schema, overwrite=args.overwrite)
+
 
 if __name__ == "__main__":
     main()

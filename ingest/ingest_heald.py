@@ -1,18 +1,16 @@
 #!/usr/bin/env python
 
 import argparse
-import pathlib
 import json
+import pathlib
 from collections import defaultdict
 
+import pymongo
 import tiled.client
+from pymongo import MongoClient
 from tiled.client import from_uri
 
-import pymongo
-from pymongo import MongoClient
-
-from util import serialize_parquet
-from util import create_collection
+from util import create_collection, serialize_parquet
 
 
 def walk(client, node, name, path, ancestors):
@@ -21,7 +19,7 @@ def walk(client, node, name, path, ancestors):
         parent = ancestors[-1]
     else:
         parent = None
-    doc = {"name" : name, "parent" : parent, "ancestors" : ancestors}
+    doc = {"name": name, "parent": parent, "ancestors": ancestors}
     if type(node) is tiled.client.node.Node:
         doc.update(leaf=False, content=None)
         id_ = client.insert_one(doc).inserted_id
@@ -35,8 +33,9 @@ def walk(client, node, name, path, ancestors):
             "structure_family": "dataframe",
             "blob": serialize_parquet(df).tobytes(),
         }
-        doc.update(leaf=True, content={"data" : data, "metadata" : metadata})
+        doc.update(leaf=True, content={"data": data, "metadata": metadata})
         client.insert_one(doc)
+
 
 def main():
     parser = argparse.ArgumentParser(description="ingest heald data")
@@ -54,11 +53,14 @@ def main():
 
     tiled_root = from_uri(args.uri)
 
-    client = MongoClient(args.mongo_uri, username=args.mongo_username, password=args.mongo_password)
+    client = MongoClient(
+        args.mongo_uri, username=args.mongo_username, password=args.mongo_password
+    )
     db = client[args.db]
     c = db[args.collection]
 
     walk(c, tiled_root, "heald", [], [])
+
 
 if __name__ == "__main__":
     main()

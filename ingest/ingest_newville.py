@@ -1,18 +1,17 @@
 #!/usr/bin/env python
 
 import argparse
-import pathlib
 import json
+import pathlib
 import uuid
-
-from tiled.examples.xdi import read_xdi
-
-from tqdm import tqdm
 
 import pymongo
 from pymongo import MongoClient
+from tiled.examples.xdi import read_xdi
+from tqdm import tqdm
 
 from util import serialize_parquet
+
 
 def main():
     parser = argparse.ArgumentParser(description="ingest newville data")
@@ -33,13 +32,21 @@ def main():
     files = list(path.rglob("*.xdi"))
     print(f"found {len(files)} xdi files to ingest")
 
-    client = MongoClient(args.mongo_uri, username=args.mongo_username, password=args.mongo_password)
+    client = MongoClient(
+        args.mongo_uri, username=args.mongo_username, password=args.mongo_password
+    )
     db = client[args.db]
     c = db[args.collection]
 
     tags = ["experiment", "newville", "xas", "xdi"]
 
-    doc = {"name" : "newville", "leaf" : False, "ancestors" : [], "parent" : None, "content" : None}
+    doc = {
+        "name": "newville",
+        "leaf": False,
+        "ancestors": [],
+        "parent": None,
+        "content": None,
+    }
     newville_id = c.insert_one(doc).inserted_id
 
     for f in tqdm(files):
@@ -47,7 +54,7 @@ def main():
         fields = metadata.pop("fields")
         metadata.update(**fields)
 
-        metadata = {k.lower() : v for k,v in metadata.items()}
+        metadata = {k.lower(): v for k, v in metadata.items()}
 
         # FIXME coerce keys to lower case?
 
@@ -62,16 +69,20 @@ def main():
         columns = list(df.columns)
         symbol = metadata["element"]["symbol"]
         edge = metadata["element"]["edge"]
-        xdi = {
-            "element": {"symbol": symbol, "edge": edge},
-            "columns" : columns
-        }
+        xdi = {"element": {"symbol": symbol, "edge": edge}, "columns": columns}
         sample_id = str(uuid.uuid4())
-        internal = {"tags" : tags, "sample_id" : sample_id, "xdi" : xdi}
+        internal = {"tags": tags, "sample_id": sample_id, "xdi": xdi}
 
-        content = {"data": data, "metadata": metadata, "internal" : internal}
-        doc = {"name" : name, "leaf" : True, "ancestors" : [newville_id], "parent" : newville_id, "content" : content}
+        content = {"data": data, "metadata": metadata, "internal": internal}
+        doc = {
+            "name": name,
+            "leaf": True,
+            "ancestors": [newville_id],
+            "parent": newville_id,
+            "content": content,
+        }
         c.insert_one(doc)
+
 
 if __name__ == "__main__":
     main()

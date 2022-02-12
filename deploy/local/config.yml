@@ -1,11 +1,11 @@
 trees:
   - path: /
-    tree: aimmdb:MongoXASTree.from_uri
+    tree: aimmdb:AIMMTree.from_uri
     args:
       uri: ${MONGO_URI}
       username: root
       password: ${MONGO_PASSWORD}
-      collection_name: "spike"
+      collection_name: "tiled"
 authentication:
   allow_anonymous_access: false
   single_user_api_key: abc

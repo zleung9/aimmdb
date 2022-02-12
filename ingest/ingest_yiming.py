@@ -1,20 +1,18 @@
 #!/usr/bin/env python
 
 import argparse
+import json
 import pathlib
 import subprocess
-import json
 from collections import defaultdict
 
 import pandas as pd
-
-from tqdm import tqdm
-
 import pymongo
 from pymongo import MongoClient
+from tqdm import tqdm
 
-from util import serialize_parquet
-from util import create_collection
+from util import create_collection, serialize_parquet
+
 
 def get_symbol(doc):
     # first try the absorbing_atom field
@@ -29,7 +27,10 @@ def get_symbol(doc):
 
     # give up
     _id = doc["_id"]
-    raise KeyError(f"unable to retrive element symbol from {_id}, {absorbing_atom=}, {absorbing_species=}")
+    raise KeyError(
+        f"unable to retrive element symbol from {_id}, {absorbing_atom=}, {absorbing_species=}"
+    )
+
 
 def main():
     parser = argparse.ArgumentParser(description="ingest yiming xas data")

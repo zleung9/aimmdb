@@ -1,19 +1,16 @@
 #!/usr/bin/env python
 
 import argparse
-import pathlib
 import json
+import pathlib
 from collections import defaultdict
 
+import pandas as pd
 import pymongo
 from pymongo import MongoClient
-
-import pandas as pd
-
 from tqdm import tqdm
 
-from util import serialize_parquet
-from util import create_collection
+from util import create_collection, serialize_parquet
 
 target_elements_groups = [
     ("Ti", "O"),
@@ -50,7 +47,6 @@ def main():
         schema = json.load(f)
 
     c = create_collection(db, args.collection, schema, overwrite=args.overwrite)
-
 
     counts = defaultdict(int)
 
