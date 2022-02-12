@@ -3,6 +3,7 @@
 import argparse
 import pathlib
 import json
+import uuid
 
 from tiled.examples.xdi import read_xdi
 
@@ -36,7 +37,7 @@ def main():
     db = client[args.db]
     c = db[args.collection]
 
-    specs = ["experiment", "newville", "xas"]
+    tags = ["experiment", "newville", "xas", "xdi"]
 
     doc = {"name" : "newville", "leaf" : False, "ancestors" : [], "parent" : None, "content" : None}
     newville_id = c.insert_one(doc).inserted_id
@@ -46,18 +47,11 @@ def main():
         fields = metadata.pop("fields")
         metadata.update(**fields)
 
-        symbol = metadata["Element"]["symbol"]
-        edge = metadata["Element"]["edge"]
+        metadata = {k.lower() : v for k,v in metadata.items()}
+
+        # FIXME coerce keys to lower case?
 
         name = f.stem
-
-        columns = list(df.columns)
-        common = {
-            "element": {"symbol": symbol, "edge": edge},
-            "specs": specs,
-            "columns" : columns
-        }
-        metadata["common"] = common
 
         data = {
             "media_type": "application/x-parquet",
@@ -65,7 +59,17 @@ def main():
             "blob": serialize_parquet(df).tobytes(),
         }
 
-        content = {"data": data, "metadata": metadata}
+        columns = list(df.columns)
+        symbol = metadata["element"]["symbol"]
+        edge = metadata["element"]["edge"]
+        xdi = {
+            "element": {"symbol": symbol, "edge": edge},
+            "columns" : columns
+        }
+        sample_id = str(uuid.uuid4())
+        internal = {"tags" : tags, "sample_id" : sample_id, "xdi" : xdi}
+
+        content = {"data": data, "metadata": metadata, "internal" : internal}
         doc = {"name" : name, "leaf" : True, "ancestors" : [newville_id], "parent" : newville_id, "content" : content}
         c.insert_one(doc)
 
