@@ -301,13 +301,11 @@ class AIMMTree(MongoCollectionTree):
         return self
 
 
-# FIXME filtering needs to work differently since documents now contain multiple measurements
-# def run_raw_mongo_query(query, tree):
-#    query = json.loads(query.query)
-#    query = {"$or" : [{"folder" : True}, query]}
-#    return tree.new_variation(queries=tree._queries + [query])
-# AIMMTree.register_query(RawMongoQuery, run_raw_mongo_query)
-
+def run_raw_mongo_query(query, tree):
+   query = json.loads(query.query)
+   query = {"$or" : [{"folder" : True}, query]}
+   return tree.new_variation(queries=tree._queries + [query])
+AIMMTree.register_query(RawMongoQuery, run_raw_mongo_query)
 
 def walk(node, pre=None):
     pre = pre[:] if pre else []
