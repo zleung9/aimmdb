@@ -269,6 +269,12 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         dset = self._build_node(doc)
         return (k, dset)
 
+    def read(self, fields=None):
+        if fields is not None:
+            raise NotImplementedError
+        return self
+
+
 def run_raw_mongo_query(query, tree):
     query = json.loads(query.query)
     return tree.new_variation(queries=tree._queries + [query])
@@ -282,16 +288,15 @@ def walk(node, pre=None):
         for k, v in node.items():
             yield from walk(v, pre + [k])
         if node.metadata:
-            yield from walk(node.metadata, pre + ["_metadata"])
+            yield from walk(node.metadata, pre + ["metadata"])
     elif isinstance(node, collections.abc.Mapping):
         for k, v in node.items():
             yield from walk(v, pre + [k])
     elif isinstance(node, DataFrameAdapter):
         df = node.read()
-        yield (df.to_numpy(), pre + ["_data"])
-        metadata = {**node.metadata}
-        metadata["columns"] = list(df.columns)
-        yield from walk(metadata, pre + ["_metadata"])
+        yield from walk({k : df[k].to_numpy() for k in df}, pre + ["data"])
+        if node.metadata:
+            yield from walk(node.metadata, pre + ["metadata"])
     else:
         yield (node, pre)
 
