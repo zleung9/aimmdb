@@ -30,12 +30,7 @@ from tiled.query_registration import QueryTranslationRegistry, register
 from tiled.server.authentication import get_current_principal
 from tiled.utils import UNCHANGED, DictView, import_object
 
-
-def deserialize_parquet(data):
-    reader = pa.BufferReader(data)
-    table = pq.read_table(reader)
-    return table.to_pandas()
-
+from .serialization import deserialize_parquet
 
 @register(name="raw_mongo")
 @dataclass
@@ -62,7 +57,7 @@ def _get_database(uri, username, password):
         return client.get_database()
 
 
-class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
+class AIMMTree(collections.abc.Mapping, IndexersMixin):
 
     structure_family = "node"
 
@@ -77,7 +72,8 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         uri,
         username,
         password,
-        collection_name,
+        tree_collection_name,
+        data_collection_name,
         *,
         metadata=None,
         access_policy=None,
@@ -85,10 +81,12 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
     ):
 
         db = _get_database(uri, username, password)
-        collection = db.get_collection(collection_name)
+        tree = db.get_collection(tree_collection_name)
+        data = db.get_collection(data_collection_name)
 
         return cls(
-            collection,
+            tree,
+            data,
             metadata=metadata,
             access_policy=access_policy,
             authenticated_identity=authenticated_identity,
@@ -96,7 +94,8 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
 
     def __init__(
         self,
-        collection,
+        tree,
+        data,
         metadata=None,
         access_policy=None,
         authenticated_identity=None,
@@ -104,7 +103,8 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         path="/",
     ):
 
-        self._collection = collection
+        self._tree = tree
+        self._data = data
 
         self._metadata = metadata or {}
         if isinstance(access_policy, str):
@@ -124,8 +124,12 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         super().__init__()
 
     @property
-    def collection(self):
-        return self._collection
+    def data_collection(self):
+        return self._data
+    
+    @property
+    def tree_collection(self):
+        return self._tree
 
     @property
     def access_policy(self):
@@ -148,19 +152,28 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         combined += self._queries
         combined += list(queries)
         if combined:
-            return {"$and": combined}
+            query = {"$and": combined}
         else:
-            return {}
+            query = {}
+        return query
 
     def _build_node(self, doc):
-        raise NotImplementedError
+        if doc["structure_family"] == "node":
+            name = doc["name"]
+            metadata = doc["metadata"]
+            return self.new_variation(path=f"{self._path}{name}/", metadata=metadata)
+        elif doc["structure_family"] == "dataframe":
+            data_doc = self._data.find_one({"_id" : doc["data_id"]})
+            assert data_doc["structure_family"] == "dataframe"
+            df = deserialize_parquet(data_doc["data"]["blob"])
+            return DataFrameAdapter.from_pandas(df, metadata=data_doc["metadata"], npartitions=1)
 
     def __len__(self):
-        return self._collection.count_documents(self._build_mongo_query())
+        return self._tree.count_documents(self._build_mongo_query())
 
     def __getitem__(self, key):
         query = self._build_mongo_query({"name": key})
-        docs = list(self._collection.find(query))
+        docs = list(self._tree.find(query))
 
         if len(docs) == 0:
             raise KeyError(f"{key} not found")
@@ -171,7 +184,8 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         return self._build_node(docs[0])
 
     def __iter__(self):
-        for doc in self._collection.find(self._build_mongo_query(), {"name": 1}):
+        query = self._build_mongo_query()
+        for doc in self._tree.find(self._build_mongo_query(), {"name": 1}):
             yield str(doc["name"])
 
     def authenticated_as(self, identity):
@@ -187,7 +201,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         return tree
 
     def new_variation(
-        self, authenticated_identity=UNCHANGED, queries=UNCHANGED, path=UNCHANGED
+        self, authenticated_identity=UNCHANGED, queries=UNCHANGED, path=UNCHANGED, metadata=UNCHANGED
     ):
         if authenticated_identity is UNCHANGED:
             authenticated_identity = self._authenticated_identity
@@ -195,10 +209,13 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
             queries = self._queries
         if path is UNCHANGED:
             path = self._path
+        if metadata is UNCHANGED:
+            metadata = self._metadata
 
         return type(self)(
-            collection=self._collection,
-            metadata=self._metadata,
+            tree=self._tree,
+            data=self._data,
+            metadata=metadata,
             access_policy=self._access_policy,
             authenticated_identity=authenticated_identity,
             queries=queries,
@@ -212,7 +229,6 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         """
         Return a Tree with a subset of the mapping.
         """
-        print(f"{query=}")
         return self.query_registry(query, self)
 
     def _keys_slice(self, start, stop, direction):
@@ -224,7 +240,7 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
             limit = None
 
         query = self._build_mongo_query()
-        for doc in self._collection.find(query, {"name": 1}).skip(skip).limit(limit):
+        for doc in self._tree.find(query, {"name": 1}).skip(skip).limit(limit):
             k = str(doc["name"])
             yield k
 
@@ -236,9 +252,8 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         else:
             limit = None
 
-        # FIXME don't load full document with all the data here
         for doc in (
-            self._collection.find(self._build_mongo_query()).skip(skip).limit(limit)
+            self._tree.find(self._build_mongo_query()).skip(skip).limit(limit)
         ):
             k = str(doc["name"])
             dset = self._build_node(doc)
@@ -248,63 +263,16 @@ class MongoCollectionTree(collections.abc.Mapping, IndexersMixin):
         assert direction == 1, "direction=-1 should be handled by the client"
 
         doc = next(
-            self._collection.find(self._build_mongo_query()).skip(index).limit(1)
+            self._tree.find(self._build_mongo_query()).skip(index).limit(1)
         )
         k = str(doc["name"])
         dset = self._build_node(doc)
         return (k, dset)
 
-
-class AIMMTree(MongoCollectionTree):
-    def __init__(
-        self,
-        collection,
-        metadata=None,
-        access_policy=None,
-        authenticated_identity=None,
-        queries=None,
-        path="/",
-    ):
-
-        super().__init__(
-            collection, metadata, access_policy, authenticated_identity, queries, path
-        )
-
-    def _build_dataset(self, doc):
-
-        metadata = doc["metadata"]
-
-        # FIXME use tiled.utils.OneShotCachedMap to make lazy?
-        mapping = {}
-        for m in doc["measurements"]:
-            name = m["name"]
-            df = deserialize_parquet(m["data"]["blob"])
-            metadata = m["metadata"]
-            metadata["element"] = m["element"]
-
-            mapping[name] = DataFrameAdapter.from_pandas(
-                df, metadata=metadata, npartitions=1
-            )
-
-        return MapAdapter(mapping, metadata=doc["metadata"])
-
-    def _build_node(self, doc):
-        if doc["folder"]:
-            name = doc["name"]
-            return self.new_variation(path=f"{self._path}{name}/")
-        else:
-            return self._build_dataset(doc)
-
-    def read(self, fields=None):
-        if fields is not None:
-            raise NotImplementedError
-        return self
-
-
 def run_raw_mongo_query(query, tree):
-   query = json.loads(query.query)
-   query = {"$or" : [{"folder" : True}, query]}
-   return tree.new_variation(queries=tree._queries + [query])
+    query = json.loads(query.query)
+    return tree.new_variation(queries=tree._queries + [query])
+
 AIMMTree.register_query(RawMongoQuery, run_raw_mongo_query)
 
 def walk(node, pre=None):

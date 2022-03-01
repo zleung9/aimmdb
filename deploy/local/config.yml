@@ -5,7 +5,8 @@ trees:
       uri: ${MONGO_URI}
       username: root
       password: ${MONGO_PASSWORD}
-      collection_name: "tiled"
+      tree_collection_name: "tree"
+      data_collection_name: "measurements"
 authentication:
   allow_anonymous_access: false
   single_user_api_key: abc
