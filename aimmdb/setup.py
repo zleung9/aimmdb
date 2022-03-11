@@ -8,7 +8,7 @@ setup(
         "tiled",
         "pymongo",
         "pyarrow",
-        "ariadne",
+        "psycopg2-binary"
         ],
     python_requires="~=3.8",
     entry_points={},
