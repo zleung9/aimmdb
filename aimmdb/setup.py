@@ -8,7 +8,8 @@ setup(
         "tiled",
         "pymongo",
         "pyarrow",
-        "psycopg2-binary"
+        "psycopg2-binary",
+        "httpx"
         ],
     python_requires="~=3.8",
     entry_points={},
