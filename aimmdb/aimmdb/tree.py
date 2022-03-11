@@ -1,36 +1,17 @@
-import base64
 import collections.abc
 import io
-import itertools
 import json
-import sys
-import uuid
 from dataclasses import dataclass
 
-import ariadne
-import dask.array
-import dask.dataframe
 import h5py
-import numpy as np
-import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
 import pymongo
-import xarray
-from ariadne import ObjectType, QueryType, gql, make_executable_schema
-from ariadne.asgi import GraphQL
-from bson.objectid import ObjectId
-from fastapi import APIRouter, Depends, Request
-from tiled.adapters.array import ArrayAdapter
 from tiled.adapters.dataframe import DataFrameAdapter
-from tiled.adapters.mapping import MapAdapter
 from tiled.adapters.utils import IndexersMixin
-from tiled.adapters.xarray import DataArrayAdapter
 from tiled.query_registration import QueryTranslationRegistry, register
-from tiled.server.authentication import get_current_principal
 from tiled.utils import UNCHANGED, DictView, import_object
 
 from .serialization import deserialize_parquet
+
 
 @register(name="raw_mongo")
 @dataclass
@@ -126,7 +107,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
     @property
     def data_collection(self):
         return self._data
-    
+
     @property
     def tree_collection(self):
         return self._tree
@@ -163,10 +144,12 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
             metadata = doc["metadata"]
             return self.new_variation(path=f"{self._path}{name}/", metadata=metadata)
         elif doc["structure_family"] == "dataframe":
-            data_doc = self._data.find_one({"_id" : doc["data_id"]})
+            data_doc = self._data.find_one({"_id": doc["data_id"]})
             assert data_doc["structure_family"] == "dataframe"
             df = deserialize_parquet(data_doc["data"]["blob"])
-            return DataFrameAdapter.from_pandas(df, metadata=data_doc["metadata"], npartitions=1)
+            return DataFrameAdapter.from_pandas(
+                df, metadata=data_doc["metadata"], npartitions=1
+            )
 
     def __len__(self):
         return self._tree.count_documents(self._build_mongo_query())
@@ -185,7 +168,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
 
     def __iter__(self):
         query = self._build_mongo_query()
-        for doc in self._tree.find(self._build_mongo_query(), {"name": 1}):
+        for doc in self._tree.find(query, {"name": 1}):
             yield str(doc["name"])
 
     def authenticated_as(self, identity):
@@ -201,7 +184,11 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         return tree
 
     def new_variation(
-        self, authenticated_identity=UNCHANGED, queries=UNCHANGED, path=UNCHANGED, metadata=UNCHANGED
+        self,
+        authenticated_identity=UNCHANGED,
+        queries=UNCHANGED,
+        path=UNCHANGED,
+        metadata=UNCHANGED,
     ):
         if authenticated_identity is UNCHANGED:
             authenticated_identity = self._authenticated_identity
@@ -252,9 +239,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         else:
             limit = None
 
-        for doc in (
-            self._tree.find(self._build_mongo_query()).skip(skip).limit(limit)
-        ):
+        for doc in self._tree.find(self._build_mongo_query()).skip(skip).limit(limit):
             k = str(doc["name"])
             dset = self._build_node(doc)
             yield (k, dset)
@@ -262,9 +247,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
     def _item_by_index(self, index, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
 
-        doc = next(
-            self._tree.find(self._build_mongo_query()).skip(index).limit(1)
-        )
+        doc = next(self._tree.find(self._build_mongo_query()).skip(index).limit(1))
         k = str(doc["name"])
         dset = self._build_node(doc)
         return (k, dset)
@@ -279,7 +262,9 @@ def run_raw_mongo_query(query, tree):
     query = json.loads(query.query)
     return tree.new_variation(queries=tree._queries + [query])
 
+
 AIMMTree.register_query(RawMongoQuery, run_raw_mongo_query)
+
 
 def walk(node, pre=None):
     pre = pre[:] if pre else []
@@ -294,7 +279,7 @@ def walk(node, pre=None):
             yield from walk(v, pre + [k])
     elif isinstance(node, DataFrameAdapter):
         df = node.read()
-        yield from walk({k : df[k].to_numpy() for k in df}, pre + ["data"])
+        yield from walk({k: df[k].to_numpy() for k in df}, pre + ["data"])
         if node.metadata:
             yield from walk(node.metadata, pre + ["metadata"])
     else:
