@@ -1,4 +1,5 @@
-FROM ghcr.io/bluesky/tiled:main as base
+#FROM ghcr.io/bluesky/tiled:main as base
+FROM localhost/tiled:dev as base
 
 FROM base as builder
 
