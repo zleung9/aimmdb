@@ -12,3 +12,5 @@ authentication:
 media_types:
   node:
     application/x-hdf5: aimmdb:serialize_hdf5
+allow_origins:
+  - '*'
