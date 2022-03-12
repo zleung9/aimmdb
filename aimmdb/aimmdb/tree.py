@@ -58,7 +58,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         *,
         metadata=None,
         access_policy=None,
-        authenticated_identity=None,
+        principal=None,
     ):
 
         db = _get_database(uri, username, password)
@@ -70,7 +70,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
             data,
             metadata=metadata,
             access_policy=access_policy,
-            authenticated_identity=authenticated_identity,
+            principal=principal,
         )
 
     def __init__(
@@ -79,7 +79,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         data,
         metadata=None,
         access_policy=None,
-        authenticated_identity=None,
+        principal=None,
         queries=None,
         path="/",
     ):
@@ -88,16 +88,8 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         self._data = data
 
         self._metadata = metadata or {}
-        if isinstance(access_policy, str):
-            access_policy = import_object(access_policy)
-        if (access_policy is not None) and (
-            not access_policy.check_compatibility(self)
-        ):
-            raise ValueError(
-                f"Access policy {access_policy} is not compatible with this Tree."
-            )
         self._access_policy = access_policy
-        self._authenticated_identity = authenticated_identity
+        self._principal = principal
 
         self._queries = list(queries or [])
         self._path = path
@@ -117,8 +109,16 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         return self._access_policy
 
     @property
-    def authenticated_identity(self):
-        return self._authenticated_identity
+    def principal(self):
+        return self._principal
+
+    @property
+    def path(self):
+        return self._path
+
+    @property
+    def queries(self):
+        return DictView(self._queries)
 
     @property
     def metadata(self):
@@ -172,39 +172,34 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
             yield str(doc["name"])
 
     def authenticated_as(self, identity):
-        # TODO understand if we should still have this code
-        #        if self._authenticated_identity is not None:
-        #            raise RuntimeError(
-        #                f"Already authenticated as {self.authenticated_identity}"
-        #            )
-        if self._access_policy is not None:
-            raise NotImplementedError
-
-        tree = self.new_variation(authenticated_identity=identity)
-        return tree
+        if self.principal is not None:
+            raise RuntimeError(f"Already authenticated as {self.principal}")
+        if self.access_policy is not None:
+            raise NotImplementedError("No support for Access Policy")
+        return self
 
     def new_variation(
         self,
-        authenticated_identity=UNCHANGED,
+        principal=UNCHANGED,
         queries=UNCHANGED,
         path=UNCHANGED,
         metadata=UNCHANGED,
     ):
-        if authenticated_identity is UNCHANGED:
-            authenticated_identity = self._authenticated_identity
+        if principal is UNCHANGED:
+            principal = self.principal
         if queries is UNCHANGED:
-            queries = self._queries
+            queries = self.queries
         if path is UNCHANGED:
-            path = self._path
+            path = self.path
         if metadata is UNCHANGED:
-            metadata = self._metadata
+            metadata = self.metadata
 
         return type(self)(
             tree=self._tree,
             data=self._data,
             metadata=metadata,
             access_policy=self._access_policy,
-            authenticated_identity=authenticated_identity,
+            principal=principal,
             queries=queries,
             path=path,
         )
