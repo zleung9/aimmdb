@@ -1,2 +1,2 @@
 from . import models, serialization, util
-from .tree import AIMMTree, serialize_hdf5
+from .tree import AIMMTree, AIMMAccessPolicy, serialize_hdf5

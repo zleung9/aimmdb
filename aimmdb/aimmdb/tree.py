@@ -2,16 +2,77 @@ import collections.abc
 import io
 import json
 from dataclasses import dataclass
+import typing
+from typing import List, Optional
+
+import fastapi
+from fastapi import APIRouter
+from fastapi import Depends, Security
+
+import strawberry
+from strawberry.fastapi import GraphQLRouter
+from strawberry.scalars import JSON
+from strawberry.types import Info
+from strawberry.tools import create_type, merge_types
+from strawberry.permission import BasePermission
 
 import h5py
 import pymongo
 from tiled.adapters.dataframe import DataFrameAdapter
+from tiled.adapters.mapping import MapAdapter
 from tiled.adapters.utils import IndexersMixin
 from tiled.query_registration import QueryTranslationRegistry, register
-from tiled.utils import UNCHANGED, DictView, import_object
+from tiled.utils import UNCHANGED, DictView, import_object, SpecialUsers
+
+from tiled.server.authentication import get_current_principal
+from tiled.server.dependencies import get_root_tree
 
 from .serialization import deserialize_parquet
 
+class WritePermission(BasePermission):
+    message = "User does not have write permission"
+    async def has_permission(self, source: typing.Any, info: Info, **kwargs) -> bool:
+        try:
+            principal=info.context["principal"]
+            root = info.context["root_tree"]
+            return root.access_policy.has_write_permission(principal)
+        except Exception as e:
+            print(f"Error while checking WritePermission: {e}")
+            return False
+
+class ReadPermission(BasePermission):
+    message = "User does not have read permission"
+    async def has_permission(self, source: typing.Any, info: Info, **kwargs) -> bool:
+        try:
+            principal=info.context["principal"]
+            root = info.context["root_tree"]
+            return root.access_policy.has_read_permission(principal)
+        except Exception as e:
+            print(f"Error while checking ReadPermission: {e}")
+            return False
+
+async def get_context(
+    principal=Security(get_current_principal, scopes=["read:metadata"]),
+    root_tree=Depends(get_root_tree),
+):
+    return {"principal": principal, "root_tree": root_tree}
+
+
+@strawberry.field(permission_classes=[ReadPermission])
+def hello(info: Info) -> str:
+    principal = info.context["principal"]
+    return f"Hello {principal}"
+
+@strawberry.mutation(permission_classes=[WritePermission])
+def record_message(message: str, info: Info) -> Optional[str]:
+    root = info.context["root_tree"]
+    db = root.db
+    try:
+        result = db.messages.insert_one({"message" : message})
+        return str(result.inserted_id)
+    except RuntimeError as e:
+        print(e)
+        return None
 
 @register(name="raw_mongo")
 @dataclass
@@ -66,6 +127,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         data = db.get_collection(data_collection_name)
 
         return cls(
+            db,
             tree,
             data,
             metadata=metadata,
@@ -75,6 +137,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
 
     def __init__(
         self,
+        db,
         tree,
         data,
         metadata=None,
@@ -83,18 +146,49 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         queries=None,
         path="/",
     ):
+        self._db = db
 
         self._tree = tree
         self._data = data
 
         self._metadata = metadata or {}
+
+        if (access_policy is not None) and (
+            not access_policy.check_compatibility(self)
+        ):
+            raise ValueError(
+                f"Access policy {access_policy} is not compatible with this Adapter."
+            )
         self._access_policy = access_policy
         self._principal = principal
 
         self._queries = list(queries or [])
         self._path = path
 
+        GQLQuery = create_type("Query", [hello])
+        GQLMutation = create_type("Mutation", [record_message])
+
+        GQLSchema = strawberry.Schema(query=GQLQuery, mutation=GQLMutation)
+        GQLRouter = GraphQLRouter(GQLSchema, context_getter=get_context, graphiql=False)
+
+        router = APIRouter()
+        router.include_router(GQLRouter, prefix="/graphql")
+
+        self.include_routers = [router]
+
         super().__init__()
+
+    @property
+    def access_policy(self):
+        return self._access_policy
+
+    @access_policy.setter
+    def access_policy(self, value):
+        self._access_policy = value
+
+    @property
+    def db(self):
+        return self._db
 
     @property
     def data_collection(self):
@@ -103,10 +197,6 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
     @property
     def tree_collection(self):
         return self._tree
-
-    @property
-    def access_policy(self):
-        return self._access_policy
 
     @property
     def principal(self):
@@ -171,12 +261,14 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         for doc in self._tree.find(query, {"name": 1}):
             yield str(doc["name"])
 
-    def authenticated_as(self, identity):
-        if self.principal is not None:
+    def authenticated_as(self, principal):
+        if self._principal is not None:
             raise RuntimeError(f"Already authenticated as {self.principal}")
-        if self.access_policy is not None:
-            raise NotImplementedError("No support for Access Policy")
-        return self
+        if self._access_policy is not None:
+            tree = self._access_policy.filter_results(self, principal)
+        else:
+            tree = self.new_variation(principal=principal)
+        return tree
 
     def new_variation(
         self,
@@ -195,6 +287,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
             metadata = self.metadata
 
         return type(self)(
+            db=self._db,
             tree=self._tree,
             data=self._data,
             metadata=metadata,
@@ -292,3 +385,47 @@ def serialize_hdf5(node, metadata):
                 file[path] = h5py.Empty("f")
 
     return buffer.getbuffer()
+
+class AIMMAccessPolicy:
+    READ = object()  # sentinel
+    READWRITE = object()  # sentinel
+
+    def __init__(self, access_lists, *, provider):
+        self.access_lists = {}
+        self.provider = provider
+        for key, value in access_lists.items():
+            if isinstance(value, str):
+                value = import_object(value)
+            if not value in (self.READ, self.READWRITE):
+                raise KeyError(f"AIMMAccessPolicy: value {value} is not AIMMAccessPolicy.READ or AIMMAcccessPolicy.READWRITE")
+            self.access_lists[key] = value
+
+    def check_compatibility(self, tree):
+        return isinstance(tree, AIMMTree)
+
+    def get_id(self, principal):
+        # Get the id (i.e. username) of this Principal for the
+        # associated authentication provider.
+        for identity in principal.identities:
+            if identity.provider == self.provider:
+                return identity.id
+        else:
+            raise ValueError(
+                f"Principcal {principal} has no identity from provider {self.provider}. "
+                f"Its identities are: {principal.identities}"
+            )
+
+    def has_read_permission(self, principal):
+        id = self.get_id(principal)
+        return (principal is SpecialUsers.admin) or (id in self.access_lists.keys())
+
+    def has_write_permission(self, principal):
+        id = self.get_id(principal)
+        permission = self.access_lists.get(id, None)
+        return (principal is SpecialUsers.admin) or (permission is self.READWRITE)
+
+    def filter_results(self, tree, principal):
+        if self.has_read_permission(principal):
+            return tree
+        else:
+            return MapAdapter({})

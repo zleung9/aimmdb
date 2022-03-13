@@ -1,6 +1,13 @@
 trees:
   - path: /
     tree: aimmdb:AIMMTree.from_uri
+    access_control:
+      access_policy: aimmdb:AIMMAccessPolicy
+      args:
+        provider: toy
+        access_lists:
+          joe: aimmdb:AIMMAccessPolicy.READWRITE
+          dan: aimmdb:AIMMAccessPolicy.READ
     args:
       uri: ${MONGO_URI}
       username: root
@@ -8,7 +15,18 @@ trees:
       tree_collection_name: "tree"
       data_collection_name: "measurements"
 authentication:
-  allow_anonymous_access: true
+  allow_anonymous_access: false
+  providers:
+    - provider: toy
+      authenticator: tiled.authenticators:DictionaryAuthenticator
+      args:
+        users_to_passwords:
+          joe: abc123
+          dan: def456
+          foo: foobar
+  tiled_admins:
+    - provider: toy
+      id: foo
 media_types:
   node:
     application/x-hdf5: aimmdb:serialize_hdf5
