@@ -1,6 +1,29 @@
 trees:
   - path: /
-    tree: tiled.examples.generated:tree
+    tree: aimmdb:AIMMTree.from_uri
+    args:
+      uri: ${MONGO_URI}
+      username: root
+      password: ${MONGO_PASSWORD}
+      tree_collection_name: "tree"
+      data_collection_name: "measurements"
+    access_control:
+      access_policy: aimmdb:AIMMAccessPolicy
+      args:
+        provider: orcid
+        access_lists:
+          0000-0002-5947-6017: aimmdb:AIMMAccessPolicy.READ  # Dan sees all
+          0000-0003-3670-0431: aimmdb:AIMMAccessPolicy.READWRITE  # Joe sees all
+          0000-0002-1539-0297: aimmdb:AIMMAccessPolicy.READ  # Dylan sees all
+          0000-0002-3337-2930: aimmdb:AIMMAccessPolicy.READ  # Eli sees all
+          0000-0002-5269-0125: aimmdb:AIMMAccessPolicy.READ  # Alex sees all
+          0000-0003-4351-6085: aimmdb:AIMMAccessPolicy.READ  # Deyu sees all
+          0000-0003-0666-8063: aimmdb:AIMMAccessPolicy.READ  # Wanli sees all
+          0000-0001-5266-5408: aimmdb:AIMMAccessPolicy.READ  # Zhu sees all
+          0000-0002-2473-0193: aimmdb:AIMMAccessPolicy.READ  # Juan sees all
+          0000-0003-0922-1363: aimmdb:AIMMAccessPolicy.READ  # Maria sees all
+          0000-0002-5181-9513: aimmdb:AIMMAccessPolicy.READ  # Matt sees all
+          0000-0001-5651-8405: aimmdb:AIMMAccessPolicy.READ  # Xiaohui sees all
 authentication:
   allow_anonymous_access: false
   providers:
@@ -31,24 +54,3 @@ uvicorn:
 media_types:
   node:
     application/x-hdf5: aimmdb:serialize_hdf5
-
-    #access_control:
-    #  # Unauthenticated users can see some public datasets, but
-    #  # not everything.
-    #  access_policy: tiled.adapters.mapping:SimpleAccessPolicy
-    #  args:
-    #    provider: orcid
-    #    access_lists:
-    #      # Map ORCID to list of paths they can see, or ALL as shown below.
-    #      0000-0002-5947-6017: tiled.adapters.mapping:SimpleAccessPolicy.ALL  # Dan sees all
-    #      0000-0003-3670-0431: tiled.adapters.mapping:SimpleAccessPolicy.ALL  # Joe sees all
-    #      0000-0002-1539-0297: tiled.adapters.mapping:SimpleAccessPolicy.ALL  # Dylan sees all
-    #      0000-0002-3337-2930: tiled.adapters.mapping:SimpleAccessPolicy.ALL  # Eli sees all
-    #      0000-0002-5269-0125: tiled.adapters.mapping:SimpleAccessPolicy.ALL  # Alex sees all
-    #      0000-0003-4351-6085: tiled.adapters.mapping:SimpleAccessPolicy.ALL  # Deyu sees all
-    #      0000-0003-0666-8063: tiled.adapters.mapping:SimpleAccessPolicy.ALL  # Wanli sees all
-    #      0000-0001-5266-5408: tiled.adapters.mapping:SimpleAccessPolicy.ALL  # Zhu sees all
-    #      0000-0002-2473-0193: tiled.adapters.mapping:SimpleAccessPolicy.ALL  # Juan sees all
-    #      0000-0003-0922-1363: tiled.adapters.mapping:SimpleAccessPolicy.ALL  # Maria sees all
-    #      0000-0002-5181-9513: tiled.adapters.mapping:SimpleAccessPolicy.ALL  # Matt sees all
-    #      0000-0001-5651-8405: tiled.adapters.mapping:SimpleAccessPolicy.ALL  # Xiaohui sees all

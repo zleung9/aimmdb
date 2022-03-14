@@ -1,6 +1,12 @@
 trees:
   - path: /
     tree: aimmdb:AIMMTree.from_uri
+    args:
+      uri: ${MONGO_URI}
+      username: root
+      password: ${MONGO_PASSWORD}
+      tree_collection_name: "tree"
+      data_collection_name: "measurements"
     access_control:
       access_policy: aimmdb:AIMMAccessPolicy
       args:
@@ -8,12 +14,6 @@ trees:
         access_lists:
           joe: aimmdb:AIMMAccessPolicy.READWRITE
           dan: aimmdb:AIMMAccessPolicy.READ
-    args:
-      uri: ${MONGO_URI}
-      username: root
-      password: ${MONGO_PASSWORD}
-      tree_collection_name: "tree"
-      data_collection_name: "measurements"
 authentication:
   allow_anonymous_access: false
   providers:
