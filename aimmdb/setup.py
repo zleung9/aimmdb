@@ -9,7 +9,8 @@ setup(
         "pymongo",
         "pyarrow",
         "psycopg2-binary",
-        "httpx"
+        "httpx",
+        "strawberry-graphql[fastapi]",
         ],
     python_requires="~=3.8",
     entry_points={},
