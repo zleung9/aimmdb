@@ -32,7 +32,7 @@ authentication:
       args:
         client_id: ${ORCID_CLIENT_ID}
         client_secret: ${ORCID_CLIENT_SECRET}
-        redirect_uri: https://aimm.lbl.gov/static/login.html
+        redirect_uri: https://aimm-staging.lbl.gov/static/login.html
         public_keys:
           - kty: "RSA"
             e: "AQAB"

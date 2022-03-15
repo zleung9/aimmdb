@@ -1,0 +1,70 @@
+<script src="https://kjur.github.io/jsrsasign/jsrsasign-latest-all-min.js"></script>
+<script src="https://code.jquery.com/jquery-2.2.4.js"></script>
+<script>
+//config
+var clientId = "APP-0ROS9DU5F717F7XN";
+var orcidAuthUrl = "https://orcid.org/oauth/authorize";
+var orcidCert = {"kty":"RSA","e":"AQAB","use":"sig","kid":"production-orcid-org-7hdmdswarosg3gjujo8agwtazgkp1ojs","n":"jxTIntA7YvdfnYkLSN4wk__E2zf_wbb0SV_HLHFvh6a9ENVRD1_rHK0EijlBzikb-1rgDQihJETcgBLsMoZVQqGj8fDUUuxnVHsuGav_bf41PA7E_58HXKPrB2C0cON41f7K3o9TStKpVJOSXBrRWURmNQ64qnSSryn1nCxMzXpaw7VUo409ohybbvN6ngxVy4QR2NCC7Fr0QVdtapxD7zdlwx6lEwGemuqs_oG5oDtrRuRgeOHmRps2R6gG5oc-JqVMrVRv6F9h4ja3UgxCDBQjOVT1BFPWmMHnHCsVYLqbbXkZUfvP2sO1dJiYd_zrQhi-FtNth9qrLLv3gkgtwQ"};
+var pubKey = KEYUTIL.getKey(orcidCert);
+
+var tiledCodeUrl = "https://aimm-staging.lbl.gov/api/auth/provider/orcid/code";
+
+function getFragmentParameterByName(name) {
+    name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+    var regex = new RegExp("[\\#&]" + name + "=([^&#]*)"),
+        results = regex.exec(window.location.hash);
+    return results === null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
+}
+
+function checkSig(idToken){
+  return KJUR.jws.JWS.verifyJWT(idToken, pubKey, {
+    alg: ['RS256'], iss: ["https:\/\/orcid.org"] , aud:clientId,gracePeriod: 15*60 //15 mins skew allowed
+  });
+}
+
+async function getToken(code){
+    const url = `${tiledCodeUrl}?code=${code}`
+    const response = await fetch(url, {method: 'GET', mode: 'no-cors'})
+    return response.text();
+}
+
+$(document).ready(function() {
+//   var id_token = getFragmentParameterByName("id_token");
+//   var code = getFragmentParameterByName("code");
+  const urlParams = new URLSearchParams(window.location.search)
+  const id_token = urlParams.get('id_token');
+  const code = urlParams.get('code');
+  if(code){
+    $("#login").hide();
+    getToken(code).then(token => {
+	    $('#token_msg').show();
+	    $('#access_token').text(token);
+	    window.localStorage.setItem('tiled_refresh_token', token);
+      navigator.clipboard.writeText(token);
+ 		}); 
+    }
+  $('#token_msg').hide();
+
+  if(id_token){
+    console.log("!!!!");
+    $("#login").hide();
+    if (checkSig(id_token)){
+      $("#info").text("SIGNATURE VERIFIED!");
+      $("#contents").text(KJUR.jws.JWS.parse(id_token).payloadPP);
+      console.log(KJUR.jws.JWS.parse(id_token).payloadPP);
+    }else{
+      $("#info").text("INVALID TOKEN!");
+      $("#contents").text(KJUR.jws.JWS.parse(id_token).payloadPP);
+    }
+  }else{
+  //  $("#login").attr("href",orcidAuthUrl+"?response_type=code&redirect_uri=https%3A%2F%2Faimm.lbl.gov%2Fstatic%2Flogin.html&client_id="+clientId+"&scope=openid&nonce=whatever");	
+  $("#login").attr("href",orcidAuthUrl+"?response_type=token&redirect_uri=https%3A%2F%2Faimm.lbl.gov%2Fstatic%2Flogin.html&client_id="+clientId+"&scope=openid&&code_challenge_method=S256&code_challenge=c2x9RGpVeF9GdIJ6AgIHnYzyl7gXPatBNtUT43BCLrQ");	
+  }
+});
+</script>
+<a id="login">sign into ORCID</a>
+<h3 id="info"></h3><p id="contents"></p>
+<div id="token_msg"> 
+	<p>Your are logged in with tiled token. The token has been copied to your clipboard.<p>
+	<p id="access_token"/>
+</div>
