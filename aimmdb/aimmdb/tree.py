@@ -28,6 +28,7 @@ from tiled.server.authentication import get_current_principal
 from tiled.server.dependencies import get_root_tree
 
 from .serialization import deserialize_parquet
+from .authentication import AIMMAuthenticator
 
 class WritePermission(BasePermission):
     message = "User does not have write permission"

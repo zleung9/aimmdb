@@ -12,6 +12,7 @@ setup(
         "httpx",
         "strawberry-graphql[fastapi]",
         ],
-    python_requires="~=3.8",
+    python_requires="~=3.9",
     entry_points={},
+    package_data={"aimmdb" : ["data/*"]}
 )
