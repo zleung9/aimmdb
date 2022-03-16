@@ -25,7 +25,9 @@ def read_group(g, jsoncompat=False):
         out[k] = x
     return out
 
+
 _ELEMENT_DATA = None
+
 
 def get_element_data():
     # load on first access
@@ -36,3 +38,31 @@ def get_element_data():
             data = json.load(f)
         _ELEMENT_DATA = data
     return _ELEMENT_DATA
+
+
+def get_share_aimmdb_path():
+    """Walk up until we find share/aimmdb"""
+    import sys
+    from os.path import abspath, dirname, exists, join, split
+
+    path = abspath(dirname(__file__))
+    starting_points = [path]
+    if not path.startswith(sys.prefix):
+        starting_points.append(sys.prefix)
+    for path in starting_points:
+        # walk up, looking for prefix/share/jupyter
+        while path != "/":
+            share_tiled = join(path, "share", "aimmdb")
+            if exists(
+                join(share_tiled, ".identifying_file_5fde776bf5ee64081be861ce6f02490b")
+            ):
+                # We have the found the right directory,
+                # or one that is trying very hard to pretend to be!
+                return share_tiled
+            path, _ = split(path)
+    # Give up
+    return ""
+
+
+# Package managers can just override this with the appropriate constant
+SHARE_AIMMDB_PATH = get_share_aimmdb_path()

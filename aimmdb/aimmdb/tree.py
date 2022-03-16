@@ -30,27 +30,32 @@ from tiled.server.dependencies import get_root_tree
 from .serialization import deserialize_parquet
 from .authentication import AIMMAuthenticator
 
+
 class WritePermission(BasePermission):
     message = "User does not have write permission"
+
     async def has_permission(self, source: typing.Any, info: Info, **kwargs) -> bool:
         try:
-            principal=info.context["principal"]
+            principal = info.context["principal"]
             root = info.context["root_tree"]
             return root.access_policy.has_write_permission(principal)
         except Exception as e:
             print(f"Error while checking WritePermission: {e}")
             return False
 
+
 class ReadPermission(BasePermission):
     message = "User does not have read permission"
+
     async def has_permission(self, source: typing.Any, info: Info, **kwargs) -> bool:
         try:
-            principal=info.context["principal"]
+            principal = info.context["principal"]
             root = info.context["root_tree"]
             return root.access_policy.has_read_permission(principal)
         except Exception as e:
             print(f"Error while checking ReadPermission: {e}")
             return False
+
 
 async def get_context(
     principal=Security(get_current_principal, scopes=["read:metadata"]),
@@ -64,16 +69,18 @@ def hello(info: Info) -> str:
     principal = info.context["principal"]
     return f"Hello {principal}"
 
+
 @strawberry.mutation(permission_classes=[WritePermission])
 def record_message(message: str, info: Info) -> Optional[str]:
     root = info.context["root_tree"]
     db = root.db
     try:
-        result = db.messages.insert_one({"message" : message})
+        result = db.messages.insert_one({"message": message})
         return str(result.inserted_id)
     except RuntimeError as e:
         print(e)
         return None
+
 
 @register(name="raw_mongo")
 @dataclass
@@ -387,6 +394,7 @@ def serialize_hdf5(node, metadata):
 
     return buffer.getbuffer()
 
+
 class AIMMAccessPolicy:
     READ = object()  # sentinel
     READWRITE = object()  # sentinel
@@ -398,7 +406,9 @@ class AIMMAccessPolicy:
             if isinstance(value, str):
                 value = import_object(value)
             if not value in (self.READ, self.READWRITE):
-                raise KeyError(f"AIMMAccessPolicy: value {value} is not AIMMAccessPolicy.READ or AIMMAcccessPolicy.READWRITE")
+                raise KeyError(
+                    f"AIMMAccessPolicy: value {value} is not AIMMAccessPolicy.READ or AIMMAcccessPolicy.READWRITE"
+                )
             self.access_lists[key] = value
 
     def check_compatibility(self, tree):
