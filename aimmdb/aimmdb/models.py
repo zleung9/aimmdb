@@ -9,7 +9,7 @@ from bson.objectid import ObjectId
 from pydantic import BaseModel, Extra, ValidationError, validator
 
 from .serialization import serialize_parquet
-from .util import _edges, _symbols
+from .utils import get_element_data
 
 
 # see https://stackoverflow.com/questions/59503461/how-to-parse-objectid-in-a-pydantic-model
@@ -76,13 +76,15 @@ class XDIElement(BaseModel):
 
     @validator("symbol")
     def check_symbol(cls, s):
-        if s not in _symbols:
+        symbols = get_element_data()["symbols"]
+        if s not in symbols:
             raise ValueError(f"{s} not a valid element symbol")
         return s
 
     @validator("edge")
     def check_edge(cls, e):
-        if e not in _edges:
+        edges = get_element_data()["edges"]
+        if e not in edges:
             raise ValueError(f"{e} not a valid edge")
         return e
 

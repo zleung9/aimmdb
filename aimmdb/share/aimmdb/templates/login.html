@@ -1,0 +1,34 @@
+<script>
+var orcid_config = {{ orcid_config | tojson }}
+
+async function getToken(code){
+    const url = `${orcid_config.tiled_code_url}?code=${code}`
+    const response = await fetch(url, {method: 'GET', mode: 'no-cors'})
+    return response.text();
+}
+
+document.addEventListener("DOMContentLoaded", function(event) {
+  const urlParams = new URLSearchParams(window.location.search)
+  const code = urlParams.get('code');
+  if(code){
+    document.getElementById("login").style.display = "none";
+    getToken(code).then(token => {
+      document.getElementById('token_msg').style.display = "block";
+      document.getElementById('access_token').textContent = token;
+      window.localStorage.setItem('tiled_refresh_token', token);
+      navigator.clipboard.writeText(token);
+     });
+  }
+  else{
+    document.getElementById("token_msg").style.display = "none";
+    var url = new URL(orcid_config.authorization_endpoint);
+    document.getElementById("login").href = url.href;
+  }
+});
+
+</script>
+<a id="login">sign into ORCID</a>
+<div id="token_msg">
+  <p>Your are logged in with tiled token. The token has been copied to your clipboard.<p>
+  <p id="access_token"/>
+</div>
