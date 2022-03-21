@@ -130,3 +130,8 @@ class Node(BaseModel):
     metadata: dict  # denormalized
     structure_family: StructureFamilyEnum  # denormalized
     data_id: Union[None, PydanticObjectId]
+
+
+class PostDatasetData(pydantic.BaseModel):
+    name: str
+    metadata: dict

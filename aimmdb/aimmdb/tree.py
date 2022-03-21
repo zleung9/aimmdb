@@ -2,19 +2,10 @@ import collections.abc
 import io
 import json
 from dataclasses import dataclass
-import typing
-from typing import List, Optional
 
+import pydantic
 import fastapi
-from fastapi import APIRouter
-from fastapi import Depends, Security
-
-import strawberry
-from strawberry.fastapi import GraphQLRouter
-from strawberry.scalars import JSON
-from strawberry.types import Info
-from strawberry.tools import create_type, merge_types
-from strawberry.permission import BasePermission
+from fastapi import APIRouter, HTTPException, Request, Depends, Security
 
 import h5py
 import pymongo
@@ -27,59 +18,9 @@ from tiled.utils import UNCHANGED, DictView, import_object, SpecialUsers
 from tiled.server.authentication import get_current_principal
 from tiled.server.dependencies import get_root_tree
 
-from .serialization import deserialize_parquet
+from .serialization import deserialize_parquet, serialize_hdf5
 from .authentication import AIMMAuthenticator
-
-
-class WritePermission(BasePermission):
-    message = "User does not have write permission"
-
-    async def has_permission(self, source: typing.Any, info: Info, **kwargs) -> bool:
-        try:
-            principal = info.context["principal"]
-            root = info.context["root_tree"]
-            return root.access_policy.has_write_permission(principal)
-        except Exception as e:
-            print(f"Error while checking WritePermission: {e}")
-            return False
-
-
-class ReadPermission(BasePermission):
-    message = "User does not have read permission"
-
-    async def has_permission(self, source: typing.Any, info: Info, **kwargs) -> bool:
-        try:
-            principal = info.context["principal"]
-            root = info.context["root_tree"]
-            return root.access_policy.has_read_permission(principal)
-        except Exception as e:
-            print(f"Error while checking ReadPermission: {e}")
-            return False
-
-
-async def get_context(
-    principal=Security(get_current_principal, scopes=["read:metadata"]),
-    root_tree=Depends(get_root_tree),
-):
-    return {"principal": principal, "root_tree": root_tree}
-
-
-@strawberry.field(permission_classes=[ReadPermission])
-def hello(info: Info) -> str:
-    principal = info.context["principal"]
-    return f"Hello {principal}"
-
-
-@strawberry.mutation(permission_classes=[WritePermission])
-def record_message(message: str, info: Info) -> Optional[str]:
-    root = info.context["root_tree"]
-    db = root.db
-    try:
-        result = db.messages.insert_one({"message": message})
-        return str(result.inserted_id)
-    except RuntimeError as e:
-        print(e)
-        return None
+from .router import router
 
 
 @register(name="raw_mongo")
@@ -173,15 +114,10 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         self._queries = list(queries or [])
         self._path = path
 
-        GQLQuery = create_type("Query", [hello])
-        GQLMutation = create_type("Mutation", [record_message])
+        from .router import router
+        from .graphql import GQLRouter
 
-        GQLSchema = strawberry.Schema(query=GQLQuery, mutation=GQLMutation)
-        GQLRouter = GraphQLRouter(GQLSchema, context_getter=get_context, graphiql=False)
-
-        router = APIRouter()
         router.include_router(GQLRouter, prefix="/graphql")
-
         self.include_routers = [router]
 
         super().__init__()
@@ -380,19 +316,6 @@ def walk(node, pre=None):
             yield from walk(node.metadata, pre + ["metadata"])
     else:
         yield (node, pre)
-
-
-def serialize_hdf5(node, metadata):
-    buffer = io.BytesIO()
-    with h5py.File(buffer, mode="w") as file:
-        for (x, pre) in walk(node):
-            path = "/".join(pre)
-            if x is not None:
-                file[path] = x
-            else:
-                file[path] = h5py.Empty("f")
-
-    return buffer.getbuffer()
 
 
 class AIMMAccessPolicy:
