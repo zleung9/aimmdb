@@ -5,8 +5,6 @@ trees:
       uri: ${MONGO_URI}
       username: root
       password: ${MONGO_PASSWORD}
-      tree_collection_name: "tree"
-      data_collection_name: "measurements"
     access_control:
       access_policy: aimmdb:AIMMAccessPolicy
       args:
@@ -47,10 +45,9 @@ authentication:
     - provider: orcid
       id: 0000-0003-3670-0431
 database_uri: "postgresql://tiled:${TILED_DATABASE_PASSWORD}@postgres/tiled"
-uvicorn:
-  host: 0.0.0.0
-  port: 8000
-  proxy-headers: true
 media_types:
   node:
     application/x-hdf5: aimmdb:serialize_hdf5
+uvicorn:
+  host: 0.0.0.0
+  port: 8000

@@ -5,24 +5,10 @@ from typing import Dict, List, Optional, Union
 import numpy as np
 import pandas as pd
 import pydantic
-from bson.objectid import ObjectId
 from pydantic import BaseModel, Extra, ValidationError, validator
 
-from .serialization import serialize_parquet
+from .serialization import serialize_parquet, serialize_npy
 from .utils import get_element_data
-
-
-# see https://stackoverflow.com/questions/59503461/how-to-parse-objectid-in-a-pydantic-model
-class PydanticObjectId(ObjectId):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        if not isinstance(v, ObjectId):
-            raise TypeError("ObjectId required")
-        return v
 
 
 # parquet is self-describing but we duplicate the metadata to make it
@@ -34,9 +20,10 @@ class DataFrameData(BaseModel):
 
     @classmethod
     def from_pandas(cls, df):
-        blob = serialize_parquet(df).tobytes()
         return cls(
-            columns=list(df.columns), media_type="application/x-parquet", blob=blob
+            columns=list(df.columns),
+            media_type="application/x-parquet",
+            blob=serialize_parquet(df).tobytes(),
         )
 
 
@@ -50,11 +37,11 @@ class ArrayData(BaseModel):
 
     @classmethod
     def from_numpy(cls, x):
-        with io.BytesIO() as f:
-            np.save(f, x)
-            blob = f.getvalue()
         return cls(
-            shape=x.shape, dtype=x.dtype.str, media_type="application/x-npy", blob=blob
+            shape=x.shape,
+            dtype=x.dtype.str,
+            media_type="application/x-npy",
+            blob=serialize_npy(x),
         )
 
 
@@ -95,43 +82,27 @@ class MeasurementEnum(str, Enum):
 
 
 class ProvenanceData(BaseModel):
-    source_id: str
+    source: str
     url: Optional[str]
     license: Optional[str]
     description: Optional[str]
 
 
 class XASMetadata(BaseModel, extra=Extra.allow):
-    name: str
     element: XDIElement
     measurement_type: MeasurementEnum = "xas"
     provenance: ProvenanceData
+    sample_id: str
 
-
-class XASMeasurement(TiledData):
+class XASData(TiledData):
     metadata: XASMetadata
-
-    # TODO  does it make sense to have fields that extend TiledData like this?
-    sample_id: PydanticObjectId
 
 
 class SampleMetadata(BaseModel, extra=Extra.allow):
+    name: str
+    dataset: str
     provenance: ProvenanceData
 
 
-class Sample(BaseModel):
-    name: str
+class SampleData(BaseModel):
     metadata: SampleMetadata
-
-
-class Node(BaseModel):
-    name: str  # denormalized
-    path: str
-    metadata: dict  # denormalized
-    structure_family: StructureFamilyEnum  # denormalized
-    data_id: Union[None, PydanticObjectId]
-
-
-class PostDatasetData(pydantic.BaseModel):
-    name: str
-    metadata: dict

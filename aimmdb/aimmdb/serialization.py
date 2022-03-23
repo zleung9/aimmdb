@@ -1,6 +1,15 @@
+import io
+
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+
+def serialize_npy(x):
+    with io.BytesIO() as f:
+        np.save(f, x)
+        blob = f.getvalue()
 
 
 def serialize_parquet(df):

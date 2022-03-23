@@ -9,17 +9,19 @@ from fastapi import APIRouter, HTTPException, Request, Depends, Security
 
 import h5py
 import pymongo
+from bson.objectid import ObjectId
 from tiled.adapters.dataframe import DataFrameAdapter
 from tiled.adapters.mapping import MapAdapter
 from tiled.adapters.utils import IndexersMixin
 from tiled.query_registration import QueryTranslationRegistry, register
-from tiled.utils import UNCHANGED, DictView, import_object, SpecialUsers
+from tiled.utils import UNCHANGED, DictView
 
 from tiled.server.authentication import get_current_principal
 from tiled.server.dependencies import get_root_tree
 
 from .serialization import deserialize_parquet, serialize_hdf5
 from .authentication import AIMMAuthenticator
+from .access import AIMMAccessPolicy
 from .router import router
 
 
@@ -63,8 +65,6 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         uri,
         username,
         password,
-        tree_collection_name,
-        data_collection_name,
         *,
         metadata=None,
         access_policy=None,
@@ -72,13 +72,15 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
     ):
 
         db = _get_database(uri, username, password)
-        tree = db.get_collection(tree_collection_name)
-        data = db.get_collection(data_collection_name)
+        required_collections = ["samples", "measurements"]
+        if not set(required_collections).issubset(set(db.list_collection_names())):
+            print("initializing mongodb")
+            # setup indexes here
+            db.create_collection("samples")
+            db.create_collection("measurements")
 
         return cls(
             db,
-            tree,
-            data,
             metadata=metadata,
             access_policy=access_policy,
             principal=principal,
@@ -87,32 +89,20 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
     def __init__(
         self,
         db,
-        tree,
-        data,
         metadata=None,
         access_policy=None,
         principal=None,
         queries=None,
-        path="/",
+        init_db=False,
     ):
         self._db = db
 
-        self._tree = tree
-        self._data = data
-
         self._metadata = metadata or {}
 
-        if (access_policy is not None) and (
-            not access_policy.check_compatibility(self)
-        ):
-            raise ValueError(
-                f"Access policy {access_policy} is not compatible with this Adapter."
-            )
         self._access_policy = access_policy
         self._principal = principal
 
         self._queries = list(queries or [])
-        self._path = path
 
         from .router import router
         from .graphql import GQLRouter
@@ -135,20 +125,8 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         return self._db
 
     @property
-    def data_collection(self):
-        return self._data
-
-    @property
-    def tree_collection(self):
-        return self._tree
-
-    @property
     def principal(self):
         return self._principal
-
-    @property
-    def path(self):
-        return self._path
 
     @property
     def queries(self):
@@ -161,49 +139,6 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         # getting the wrong impression that editing this would update anything
         # persistent.
         return DictView(self._metadata)
-
-    def _build_mongo_query(self, *queries):
-        combined = [{"path": {"$regex": f"^{self._path}[^/]*$"}}]
-        combined += self._queries
-        combined += list(queries)
-        if combined:
-            query = {"$and": combined}
-        else:
-            query = {}
-        return query
-
-    def _build_node(self, doc):
-        if doc["structure_family"] == "node":
-            name = doc["name"]
-            metadata = doc["metadata"]
-            return self.new_variation(path=f"{self._path}{name}/", metadata=metadata)
-        elif doc["structure_family"] == "dataframe":
-            data_doc = self._data.find_one({"_id": doc["data_id"]})
-            assert data_doc["structure_family"] == "dataframe"
-            df = deserialize_parquet(data_doc["data"]["blob"])
-            return DataFrameAdapter.from_pandas(
-                df, metadata=data_doc["metadata"], npartitions=1
-            )
-
-    def __len__(self):
-        return self._tree.count_documents(self._build_mongo_query())
-
-    def __getitem__(self, key):
-        query = self._build_mongo_query({"name": key})
-        docs = list(self._tree.find(query))
-
-        if len(docs) == 0:
-            raise KeyError(f"{key} not found")
-
-        if len(docs) > 1:
-            raise KeyError(f"{key} matched multipled records")
-
-        return self._build_node(docs[0])
-
-    def __iter__(self):
-        query = self._build_mongo_query()
-        for doc in self._tree.find(query, {"name": 1}):
-            yield str(doc["name"])
 
     def authenticated_as(self, principal):
         if self._principal is not None:
@@ -218,31 +153,22 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         self,
         principal=UNCHANGED,
         queries=UNCHANGED,
-        path=UNCHANGED,
         metadata=UNCHANGED,
     ):
         if principal is UNCHANGED:
             principal = self.principal
         if queries is UNCHANGED:
             queries = self.queries
-        if path is UNCHANGED:
-            path = self.path
         if metadata is UNCHANGED:
             metadata = self.metadata
 
         return type(self)(
             db=self._db,
-            tree=self._tree,
-            data=self._data,
             metadata=metadata,
             access_policy=self._access_policy,
             principal=principal,
             queries=queries,
-            path=path,
         )
-
-    # The following three methods are used by IndexersMixin
-    # to define keys_indexer, items_indexer, and values_indexer.
 
     def search(self, query):
         """
@@ -250,6 +176,47 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         """
         return self.query_registry(query, self)
 
+    def _build_node(self, doc):
+        structf = doc["structure_family"]
+        if structf == "dataframe":
+            df = deserialize_parquet(doc["data"]["blob"])
+            return DataFrameAdapter.from_pandas(
+                df, metadata=doc["metadata"], npartitions=1
+            )
+        else:
+            raise RuntimeError(f"unhandled structure family {structf}")
+
+    def _build_mongo_query(self, *queries):
+        combined = self._queries + list(queries)
+        if combined:
+            return {"$and": combined}
+        else:
+            return {}
+
+    def __len__(self):
+        query = self._build_mongo_query()
+        return self.db.measurements.count_documents(query)
+
+    def __getitem__(self, key):
+        docs = list(self.db.measurements.find({"_id": ObjectId(key)}))
+
+        if len(docs) == 0:
+            raise KeyError(f"{key} not found")
+
+        if len(docs) > 1:
+            raise KeyError(f"{key} matched multipled records")
+
+        doc = docs[0]
+
+        return self._build_node(doc)
+
+    def __iter__(self):
+        query = self._build_mongo_query()
+        for doc in self.db.datasets.find(query, {"_id": 1}):
+            yield str(doc["_id"])
+
+    # The following three methods are used by IndexersMixin
+    # to define keys_indexer, items_indexer, and values_indexer.
     def _keys_slice(self, start, stop, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
         skip = start or 0
@@ -259,8 +226,8 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
             limit = None
 
         query = self._build_mongo_query()
-        for doc in self._tree.find(query, {"name": 1}).skip(skip).limit(limit):
-            k = str(doc["name"])
+        for doc in self.db.measurements.find(query, {"_id": 1}).skip(skip).limit(limit):
+            k = str(doc["_id"])
             yield k
 
     def _items_slice(self, start, stop, direction):
@@ -271,16 +238,18 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         else:
             limit = None
 
-        for doc in self._tree.find(self._build_mongo_query()).skip(skip).limit(limit):
-            k = str(doc["name"])
+        query = self._build_mongo_query()
+        for doc in self.db.measurements.find(query).skip(skip).limit(limit):
+            k = str(doc["_id"])
             dset = self._build_node(doc)
             yield (k, dset)
 
     def _item_by_index(self, index, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
 
-        doc = next(self._tree.find(self._build_mongo_query()).skip(index).limit(1))
-        k = str(doc["name"])
+        query = self._build_mongo_query()
+        doc = next(self.db.measurements.find(query).skip(index).limit(1))
+        k = str(doc["_id"])
         dset = self._build_node(doc)
         return (k, dset)
 
@@ -316,50 +285,3 @@ def walk(node, pre=None):
             yield from walk(node.metadata, pre + ["metadata"])
     else:
         yield (node, pre)
-
-
-class AIMMAccessPolicy:
-    READ = object()  # sentinel
-    READWRITE = object()  # sentinel
-
-    def __init__(self, access_lists, *, provider):
-        self.access_lists = {}
-        self.provider = provider
-        for key, value in access_lists.items():
-            if isinstance(value, str):
-                value = import_object(value)
-            if not value in (self.READ, self.READWRITE):
-                raise KeyError(
-                    f"AIMMAccessPolicy: value {value} is not AIMMAccessPolicy.READ or AIMMAcccessPolicy.READWRITE"
-                )
-            self.access_lists[key] = value
-
-    def check_compatibility(self, tree):
-        return isinstance(tree, AIMMTree)
-
-    def get_id(self, principal):
-        # Get the id (i.e. username) of this Principal for the
-        # associated authentication provider.
-        for identity in principal.identities:
-            if identity.provider == self.provider:
-                return identity.id
-        else:
-            raise ValueError(
-                f"Principcal {principal} has no identity from provider {self.provider}. "
-                f"Its identities are: {principal.identities}"
-            )
-
-    def has_read_permission(self, principal):
-        id = self.get_id(principal)
-        return (principal is SpecialUsers.admin) or (id in self.access_lists.keys())
-
-    def has_write_permission(self, principal):
-        id = self.get_id(principal)
-        permission = self.access_lists.get(id, None)
-        return (principal is SpecialUsers.admin) or (permission is self.READWRITE)
-
-    def filter_results(self, tree, principal):
-        if self.has_read_permission(principal):
-            return tree
-        else:
-            return MapAdapter({})
