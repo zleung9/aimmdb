@@ -21,7 +21,8 @@ def application_msgpack(content_type: str = Header(...)):
 
 
 def has_write_permission(
-    principal=Security(get_current_principal), root=Depends(get_root_tree)
+    principal=Security(get_current_principal, scopes=["write:data", "write:metadata"]),
+    root=Depends(get_root_tree),
 ):
     if not root.access_policy.has_write_permission(principal):
         raise HTTPException(
@@ -40,7 +41,7 @@ def post_sample(
 ):
     try:
         r = root.db.samples.insert_one(sample.dict())
-        return {"uid" : str(r.inserted_id)}
+        return {"uid": str(r.inserted_id)}
     except Exception as e:
         print(f"post_sample: {e}")  # FIXME properly log this
         raise HTTPException(status_code=422, detail=f"unable to insert sample")
@@ -57,7 +58,7 @@ async def post_xas(
         body = await request.body()
         xas = XASData.parse_obj(msgpack.unpackb(body))
         r = root.db.measurements.insert_one(xas.dict())
-        return {"uid" : str(r.inserted_id)}
+        return {"uid": str(r.inserted_id)}
     except Exception as e:
         print(f"post_xas: {e}")  # FIXME properly log this
         raise HTTPException(status_code=422, detail=f"unable to insert xas measurement")
