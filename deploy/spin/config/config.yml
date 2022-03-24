@@ -44,7 +44,8 @@ authentication:
   tiled_admins:
     - provider: orcid
       id: 0000-0003-3670-0431
-database_uri: "postgresql://tiled:${TILED_DATABASE_PASSWORD}@postgres/tiled"
+database:
+  uri: "postgresql://tiled:${TILED_DATABASE_PASSWORD}@postgres/tiled"
 media_types:
   node:
     application/x-hdf5: aimmdb:serialize_hdf5
