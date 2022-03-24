@@ -1,14 +1,12 @@
-import typing
-from typing import List, Optional, Any
+from typing import Optional, Any
 
 import strawberry
 from strawberry.fastapi import GraphQLRouter
-from strawberry.scalars import JSON
 from strawberry.types import Info
-from strawberry.tools import create_type, merge_types
+from strawberry.tools import create_type
 from strawberry.permission import BasePermission
 
-from fastapi import APIRouter, HTTPException, Request, Depends, Security
+from fastapi import Depends, Security
 
 from tiled.server.authentication import get_current_principal
 from tiled.server.dependencies import get_root_tree

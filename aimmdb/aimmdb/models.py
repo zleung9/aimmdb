@@ -1,11 +1,7 @@
-import io
 from enum import Enum
-from typing import Dict, List, Optional, Union
+from typing import List, Optional, Union
 
-import numpy as np
-import pandas as pd
-import pydantic
-from pydantic import BaseModel, Extra, ValidationError, validator
+from pydantic import BaseModel, Extra, validator
 
 from .serialization import serialize_parquet, serialize_npy
 from .utils import get_element_data
@@ -93,6 +89,7 @@ class XASMetadata(BaseModel, extra=Extra.allow):
     measurement_type: MeasurementEnum = "xas"
     provenance: ProvenanceData
     sample_id: str
+
 
 class XASData(TiledData):
     metadata: XASMetadata

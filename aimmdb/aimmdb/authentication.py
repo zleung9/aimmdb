@@ -2,7 +2,6 @@ from pathlib import Path
 
 from tiled.authenticators import OIDCAuthenticator
 from fastapi import APIRouter, Request, Security, HTTPException
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 

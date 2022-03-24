@@ -1,8 +1,8 @@
 import importlib
 import json
-from collections import OrderedDict
 
 import h5py
+
 
 # read an hdf5 group recursively into memory
 def read_group(g, jsoncompat=False):

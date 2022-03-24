@@ -1,5 +1,3 @@
-import pydantic
-import fastapi
 import msgpack
 from fastapi import APIRouter, HTTPException, Request, Depends, Security, Header
 
@@ -44,7 +42,7 @@ def post_sample(
         return {"uid": str(r.inserted_id)}
     except Exception as e:
         print(f"post_sample: {e}")  # FIXME properly log this
-        raise HTTPException(status_code=422, detail=f"unable to insert sample")
+        raise HTTPException(status_code=422, detail="unable to insert sample")
 
 
 @router.post(
@@ -61,4 +59,4 @@ async def post_xas(
         return {"uid": str(r.inserted_id)}
     except Exception as e:
         print(f"post_xas: {e}")  # FIXME properly log this
-        raise HTTPException(status_code=422, detail=f"unable to insert xas measurement")
+        raise HTTPException(status_code=422, detail="unable to insert xas measurement")

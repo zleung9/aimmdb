@@ -1,4 +1,3 @@
-import tiled
 from tiled.utils import SpecialUsers, import_object
 from tiled.adapters.mapping import MapAdapter
 
@@ -13,7 +12,7 @@ class AIMMAccessPolicy:
         for key, value in access_lists.items():
             if isinstance(value, str):
                 value = import_object(value)
-            if not value in (self.READ, self.READWRITE):
+            if value not in (self.READ, self.READWRITE):
                 raise KeyError(
                     f"AIMMAccessPolicy: value {value} is not AIMMAccessPolicy.READ or AIMMAcccessPolicy.READWRITE"
                 )
