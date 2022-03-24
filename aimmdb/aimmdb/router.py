@@ -1,6 +1,6 @@
 import msgpack
-from fastapi import APIRouter, HTTPException, Request, Depends, Security, Header
-
+from fastapi import (APIRouter, Depends, Header, HTTPException, Request,
+                     Security)
 from tiled.server.authentication import get_current_principal
 from tiled.server.dependencies import get_root_tree
 

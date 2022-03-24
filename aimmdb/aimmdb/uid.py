@@ -1,6 +1,6 @@
 import math
-import sys
 import os
+import sys
 
 # adapted from shortuuid
 # see https://github.com/skorokithakis/shortuuid

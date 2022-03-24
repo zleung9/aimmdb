@@ -1,12 +1,11 @@
 from pathlib import Path
 
-from tiled.authenticators import OIDCAuthenticator
-from fastapi import APIRouter, Request, Security, HTTPException
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, HTTPException, Request, Security
 from fastapi.responses import HTMLResponse
-
-from tiled.server.utils import get_base_url
+from fastapi.templating import Jinja2Templates
+from tiled.authenticators import OIDCAuthenticator
 from tiled.server.authentication import get_current_principal
+from tiled.server.utils import get_base_url
 
 from .utils import SHARE_AIMMDB_PATH
 

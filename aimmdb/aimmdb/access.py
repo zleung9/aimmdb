@@ -1,5 +1,5 @@
-from tiled.utils import SpecialUsers, import_object
 from tiled.adapters.mapping import MapAdapter
+from tiled.utils import SpecialUsers, import_object
 
 
 class AIMMAccessPolicy:

@@ -1,13 +1,11 @@
-from typing import Optional, Any
+from typing import Any, Optional
 
 import strawberry
-from strawberry.fastapi import GraphQLRouter
-from strawberry.types import Info
-from strawberry.tools import create_type
-from strawberry.permission import BasePermission
-
 from fastapi import Depends, Security
-
+from strawberry.fastapi import GraphQLRouter
+from strawberry.permission import BasePermission
+from strawberry.tools import create_type
+from strawberry.types import Info
 from tiled.server.authentication import get_current_principal
 from tiled.server.dependencies import get_root_tree
 

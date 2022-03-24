@@ -90,8 +90,8 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
 
         self._queries = list(queries or [])
 
-        from .router import router
         from .graphql import GQLRouter
+        from .router import router
 
         router.include_router(GQLRouter, prefix="/graphql")
         self.include_routers = [router]

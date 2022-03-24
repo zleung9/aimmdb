@@ -3,7 +3,7 @@ from typing import List, Optional, Union
 
 from pydantic import BaseModel, Extra, validator
 
-from .serialization import serialize_parquet, serialize_npy
+from .serialization import serialize_npy, serialize_parquet
 from .utils import get_element_data
 
 
