@@ -5,6 +5,7 @@ from tiled.server.authentication import get_current_principal
 from tiled.server.dependencies import get_root_tree
 
 from .models import SampleData, XASData
+from .uid import uid
 
 
 def application_msgpack(content_type: str = Header(...)):
@@ -38,7 +39,9 @@ def post_sample(
     root=Depends(get_root_tree),
 ):
     try:
-        r = root.db.samples.insert_one(sample.dict())
+        sample_dict = sample.dict()
+        sample_dict["_id"] = uid()
+        r = root.db.samples.insert_one(sample_dict)
         return {"uid": str(r.inserted_id)}
     except Exception as e:
         print(f"post_sample: {e}")  # FIXME properly log this
@@ -55,7 +58,9 @@ async def post_xas(
     try:
         body = await request.body()
         xas = XASData.parse_obj(msgpack.unpackb(body))
-        r = root.db.measurements.insert_one(xas.dict())
+        xas_dict = xas.dict()
+        xas_dict["_id"] = uid()
+        r = root.db.measurements.insert_one(xas_dict)
         return {"uid": str(r.inserted_id)}
     except Exception as e:
         print(f"post_xas: {e}")  # FIXME properly log this

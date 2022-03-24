@@ -3,7 +3,6 @@ import json
 from dataclasses import dataclass
 
 import pymongo
-from bson.objectid import ObjectId
 from tiled.adapters.dataframe import DataFrameAdapter
 from tiled.adapters.utils import IndexersMixin
 from tiled.query_registration import QueryTranslationRegistry, register
@@ -185,7 +184,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         return self.db.measurements.count_documents(query)
 
     def __getitem__(self, key):
-        docs = list(self.db.measurements.find({"_id": ObjectId(key)}))
+        docs = list(self.db.measurements.find({"_id": key}))
 
         if len(docs) == 0:
             raise KeyError(f"{key} not found")
