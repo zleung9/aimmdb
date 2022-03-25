@@ -1,14 +1,58 @@
 import collections.abc
+import io
 import json
 from dataclasses import dataclass
+from enum import Enum
 
+import h5py
 import pymongo
 from tiled.adapters.dataframe import DataFrameAdapter
 from tiled.adapters.utils import IndexersMixin
 from tiled.query_registration import QueryTranslationRegistry, register
-from tiled.utils import UNCHANGED, DictView
+from tiled.utils import UNCHANGED, DictView, ListView
 
 from .serialization import deserialize_parquet
+
+
+class OperationEnum(str, Enum):
+    distinct = "distinct"
+    lookup = "lookup"
+    keys = "keys"
+
+
+def parse_path(path):
+    valid_keys = {"element", "edge", "uid"}
+    key_translation = {
+        "uid": "_id",
+        "element": "metadata.element.symbol",
+        "edge": "metadata.element.edge",
+    }
+    keys = path[0::2]
+    values = path[1::2]
+
+    if not set(keys).issubset(valid_keys):
+        invalid_keys = set(keys) - valid_keys
+        raise KeyError(f"keys {invalid_keys} not in {valid_keys}")
+
+    select = {key_translation[k]: v for k, v in zip(keys, values)}
+    leftover_keys = valid_keys - set(keys)
+
+    # if we have more keys then values then get distinct values for the last key
+    if len(keys) == len(values) + 1:
+        operation = (
+            OperationEnum("distinct"),
+            {"select": select, "distinct": key_translation[keys[-1]]},
+        )
+    # if keys and values are matched then perform a lookup if uid was provided otherwise get remaining keys
+    elif len(keys) == len(values):
+        if "uid" in keys:
+            operation = (OperationEnum("lookup"), {"select": select})
+        else:
+            operation = (OperationEnum("keys"), {"keys": leftover_keys})
+    else:
+        raise KeyError(f"{len(keys)=}, {len(values)=}")
+
+    return operation
 
 
 @register(name="raw_mongo")
@@ -79,7 +123,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         access_policy=None,
         principal=None,
         queries=None,
-        init_db=False,
+        path=None,
     ):
         self._db = db
 
@@ -90,6 +134,11 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
 
         self._queries = list(queries or [])
 
+        self._path = list(path or [])
+
+        self._op = parse_path(self.path)
+
+        # FIXME this shouldn't happen everytime?
         from .graphql import GQLRouter
         from .router import router
 
@@ -126,6 +175,14 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         # persistent.
         return DictView(self._metadata)
 
+    @property
+    def path(self):
+        return ListView(self._path)
+
+    @property
+    def op(self):
+        return self._op
+
     def authenticated_as(self, principal):
         if self._principal is not None:
             raise RuntimeError(f"Already authenticated as {self.principal}")
@@ -140,6 +197,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         principal=UNCHANGED,
         queries=UNCHANGED,
         metadata=UNCHANGED,
+        path=UNCHANGED,
     ):
         if principal is UNCHANGED:
             principal = self.principal
@@ -147,6 +205,8 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
             queries = self.queries
         if metadata is UNCHANGED:
             metadata = self.metadata
+        if path is UNCHANGED:
+            path = self.path
 
         return type(self)(
             db=self._db,
@@ -154,6 +214,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
             access_policy=self._access_policy,
             principal=principal,
             queries=queries,
+            path=path,
         )
 
     def search(self, query):
@@ -179,27 +240,69 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         else:
             return {}
 
-    def __len__(self):
-        query = self._build_mongo_query()
-        return self.db.measurements.count_documents(query)
-
     def __getitem__(self, key):
-        docs = list(self.db.measurements.find({"_id": key}))
+        path = self.path + [key]
+        operation = parse_path(path)
 
-        if len(docs) == 0:
-            raise KeyError(f"{key} not found")
+        # if new path is a lookup, do it now
+        if operation[0] == OperationEnum.lookup:
+            select = operation[1]["select"]
+            if "_id" not in select:
+                raise RuntimeError(f"_id not in {select}")
 
-        if len(docs) > 1:
-            raise KeyError(f"{key} matched multipled records")
+            query = self._build_mongo_query(select)
 
-        doc = docs[0]
+            docs = list(self.db.measurements.find(query))
 
-        return self._build_node(doc)
+            if len(docs) == 0:
+                raise KeyError(f"{key} not found")
+
+            if len(docs) > 1:
+                raise KeyError(f"{key} matched multipled records")
+
+            doc = docs[0]
+
+            return self._build_node(doc)
+
+        else:
+            return self.new_variation(path=path)
+
+    def __len__(self):
+        if self.op[0] == OperationEnum.keys:
+            return len(self.op[1]["keys"])
+        elif self.op[0] == OperationEnum.distinct:
+            select = self.op[1]["select"]
+            distinct = self.op[1]["distinct"]
+            query = self._build_mongo_query(select)
+            # NOTE _id is guarenteed unique
+            if distinct == "_id":
+                return self.db.measurements.count_documents(query)
+            else:
+                # FIXME wasteful to do the full self.op just to get the length
+                return len(self.db.measurements.find(query).distinct(distinct))
+        elif self.op[0] == OperationEnum.lookup:
+            raise RuntimeError("unreachable")
+        else:
+            raise RuntimeError("unreachable")
 
     def __iter__(self):
-        query = self._build_mongo_query()
-        for doc in self.db.datasets.find(query, {"_id": 1}):
-            yield str(doc["_id"])
+        if self.op[0] == OperationEnum.keys:
+            yield from self.op[1]["keys"]
+        elif self.op[0] == OperationEnum.distinct:
+            select = self.op[1]["select"]
+            distinct = self.op[1]["distinct"]
+            query = self._build_mongo_query(select)
+            # NOTE _id is guarenteed unique
+            if distinct == "_id":
+                for doc in self.db.measurements.find(query, {"_id": 1}):
+                    yield doc["_id"]
+            else:
+                for v in self.db.measurements.find(query).distinct(distinct):
+                    yield v
+        elif self.op[0] == OperationEnum.lookup:
+            raise RuntimeError("unreachable")
+        else:
+            raise RuntimeError("unreachable")
 
     # The following three methods are used by IndexersMixin
     # to define keys_indexer, items_indexer, and values_indexer.
@@ -211,10 +314,28 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         else:
             limit = None
 
-        query = self._build_mongo_query()
-        for doc in self.db.measurements.find(query, {"_id": 1}).skip(skip).limit(limit):
-            k = str(doc["_id"])
-            yield k
+        if self.op[0] == OperationEnum.keys:
+            yield from list(self.op[1]["keys"])[skip : skip + limit]
+        elif self.op[0] == OperationEnum.distinct:
+            select = self.op[1]["select"]
+            distinct = self.op[1]["distinct"]
+            query = self._build_mongo_query(select)
+            # NOTE _id is guarenteed unique
+            if distinct == "_id":
+                for doc in (
+                    self.db.measurements.find(query, {"_id": 1}).skip(skip).limit(limit)
+                ):
+                    yield doc["_id"]
+            else:
+                # FIXME wasteful to recompute this here (compute on construction?)
+                for v in self.db.measurements.find(query).distinct(distinct)[
+                    skip : skip + limit
+                ]:
+                    yield v
+        elif self.op[0] == OperationEnum.lookup:
+            raise RuntimeError("unreachable")
+        else:
+            raise RuntimeError("unreachable")
 
     def _items_slice(self, start, stop, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
@@ -224,20 +345,33 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         else:
             limit = None
 
-        query = self._build_mongo_query()
-        for doc in self.db.measurements.find(query).skip(skip).limit(limit):
-            k = str(doc["_id"])
-            dset = self._build_node(doc)
-            yield (k, dset)
+        if self.op[0] == OperationEnum.keys:
+            yield from list(self.op[1]["keys"])[skip : skip + limit]
+        elif self.op[0] == OperationEnum.distinct:
+            select = self.op[1]["select"]
+            distinct = self.op[1]["distinct"]
+            query = self._build_mongo_query(select)
+            # NOTE _id is guarenteed unique
+            if distinct == "_id":
+                for doc in (
+                    self.db.measurements.find(query, {"_id": 1}).skip(skip).limit(limit)
+                ):
+                    k = doc["_id"]
+                    yield (k, self[k])
+            else:
+                # FIXME wasteful to recompute this here (compute on construction?)
+                for v in self.db.measurements.find(query).distinct(distinct)[
+                    skip : skip + limit
+                ]:
+                    yield (v, self[v])
+        elif self.op[0] == OperationEnum.lookup:
+            raise RuntimeError("unreachable")
+        else:
+            raise RuntimeError("unreachable")
 
     def _item_by_index(self, index, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
-
-        query = self._build_mongo_query()
-        doc = next(self.db.measurements.find(query).skip(index).limit(1))
-        k = str(doc["_id"])
-        dset = self._build_node(doc)
-        return (k, dset)
+        return self._items_slice(index, index + 1, 1)
 
     def read(self, fields=None):
         if fields is not None:
@@ -271,3 +405,16 @@ def walk(node, pre=None):
             yield from walk(node.metadata, pre + ["metadata"])
     else:
         yield (node, pre)
+
+
+def serialize_hdf5(node, metadata):
+    buffer = io.BytesIO()
+    with h5py.File(buffer, mode="w") as file:
+        for (x, pre) in walk(node):
+            path = "/".join(pre)
+            if x is not None:
+                file[path] = x
+            else:
+                file[path] = h5py.Empty("f")
+
+    return buffer.getbuffer()
