@@ -4,7 +4,7 @@ from fastapi import (APIRouter, Depends, Header, HTTPException, Request,
 from tiled.server.authentication import get_current_principal
 from tiled.server.dependencies import get_root_tree
 
-from .models import SampleData, XASData
+from .models import SampleData, XASData, XASDataDenormalized
 from .uid import uid
 
 
@@ -38,14 +38,9 @@ def post_sample(
     sample: SampleData,
     root=Depends(get_root_tree),
 ):
-    try:
-        sample_dict = sample.dict()
-        sample_dict["_id"] = uid()
-        r = root.db.samples.insert_one(sample_dict)
-        return {"uid": str(r.inserted_id)}
-    except Exception as e:
-        print(f"post_sample: {e}")  # FIXME properly log this
-        raise HTTPException(status_code=422, detail="unable to insert sample")
+    sample.uid = uid()
+    r = root.db.samples.insert_one(sample.dict(by_alias=True))
+    return {"uid": str(r.inserted_id)}
 
 
 @router.post(
@@ -55,13 +50,24 @@ async def post_xas(
     request: Request,
     root=Depends(get_root_tree),
 ):
-    try:
-        body = await request.body()
-        xas = XASData.parse_obj(msgpack.unpackb(body))
-        xas_dict = xas.dict()
-        xas_dict["_id"] = uid()
-        r = root.db.measurements.insert_one(xas_dict)
-        return {"uid": str(r.inserted_id)}
-    except Exception as e:
-        print(f"post_xas: {e}")  # FIXME properly log this
-        raise HTTPException(status_code=422, detail="unable to insert xas measurement")
+    body = await request.body()
+    xas = XASData.parse_obj(msgpack.unpackb(body))
+
+    # denormalize sample on insertion
+    sample = SampleData.parse_obj(
+        root.db.samples.find_one({"_id": xas.metadata.sample_id})
+    )
+
+    xas_dict = xas.dict()
+    xas_dict["metadata"].pop("sample_id")
+
+    if "sample" in xas_dict["metadata"]:
+        xas_dict["metadata"]["sample"].update(sample.dict(by_alias=True))
+    else:
+        xas_dict["metadata"]["sample"] = sample.dict(by_alias=True)
+
+    xas_dict["_id"] = uid()
+    xas_denormalized = XASDataDenormalized.parse_obj(xas_dict)
+
+    r = root.db.measurements.insert_one(xas_denormalized.dict(by_alias=True))
+    return {"uid": str(r.inserted_id)}

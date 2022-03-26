@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List, Optional, Union
 
-from pydantic import BaseModel, Extra, validator
+from pydantic import BaseModel, Extra, Field, validator
 
 from .serialization import serialize_npy, serialize_parquet
 from .utils import get_element_data
@@ -84,6 +84,13 @@ class ProvenanceData(BaseModel):
     description: Optional[str]
 
 
+class SampleData(BaseModel, extra=Extra.allow):
+    uid: Optional[str] = Field(alias="_id")
+    name: str
+    dataset: str
+    provenance: ProvenanceData
+
+
 class XASMetadata(BaseModel, extra=Extra.allow):
     element: XDIElement
     measurement_type: MeasurementEnum = "xas"
@@ -91,15 +98,19 @@ class XASMetadata(BaseModel, extra=Extra.allow):
     sample_id: str
 
 
+class XASMetadataDenormalized(BaseModel, extra=Extra.allow):
+    element: XDIElement
+    measurement_type: MeasurementEnum = "xas"
+    provenance: ProvenanceData
+    sample: SampleData
+
+
+# FIXME clean this up with generic models???
 class XASData(TiledData):
+    uid: Optional[str] = Field(alias="_id")
     metadata: XASMetadata
 
 
-class SampleMetadata(BaseModel, extra=Extra.allow):
-    name: str
-    dataset: str
-    provenance: ProvenanceData
-
-
-class SampleData(BaseModel):
-    metadata: SampleMetadata
+class XASDataDenormalized(TiledData):
+    uid: Optional[str] = Field(alias="_id")
+    metadata: XASMetadataDenormalized

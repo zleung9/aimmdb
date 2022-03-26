@@ -20,6 +20,7 @@ class OperationEnum(str, Enum):
     keys = "keys"
 
 
+# TODO distinct operation should be able to inject metadata
 def parse_path(path):
     valid_keys = {"element", "edge", "uid"}
     key_translation = {
