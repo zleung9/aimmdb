@@ -22,12 +22,14 @@ class OperationEnum(str, Enum):
 
 # TODO distinct operation should be able to inject metadata
 def parse_path(path):
-    valid_keys = {"element", "edge", "uid"}
     key_translation = {
         "uid": "_id",
         "element": "metadata.element.symbol",
         "edge": "metadata.element.edge",
+        "sample" : "metadata.sample._id",
+        "dataset" : "metadata.sample.dataset",
     }
+    valid_keys = set(key_translation.keys())
     keys = path[0::2]
     values = path[1::2]
 
