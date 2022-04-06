@@ -349,7 +349,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
             limit = None
 
         if self.op[0] == OperationEnum.keys:
-            yield from list(self.op[1]["keys"])[skip : skip + limit]
+            yield from [(k, self[k]) for k in list(self.op[1]["keys"])[skip : skip + limit]]
         elif self.op[0] == OperationEnum.distinct:
             select = self.op[1]["select"]
             distinct = self.op[1]["distinct"]
