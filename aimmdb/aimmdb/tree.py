@@ -92,6 +92,12 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
     register_query = query_registry.register
     register_query_lazy = query_registry.register_lazy
 
+    from .graphql import GQLRouter
+    from .router import router
+
+    router.include_router(GQLRouter, prefix="/graphql")
+    include_routers = [router]
+
     @classmethod
     def from_uri(
         cls,
@@ -140,13 +146,6 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         self._path = list(path or [])
 
         self._op = parse_path(self.path)
-
-        # FIXME this shouldn't happen everytime?
-        from .graphql import GQLRouter
-        from .router import router
-
-        router.include_router(GQLRouter, prefix="/graphql")
-        self.include_routers = [router]
 
         super().__init__()
 
