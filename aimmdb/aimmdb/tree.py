@@ -147,6 +147,11 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
 
         self._op = parse_path(self.path)
 
+        if self._op[0] == OperationEnum.distinct and self._op[1]["distinct"] == "_id":
+            self.specs = ["CatalogOfMeasurements"]
+        else:
+            self.specs = []
+
         super().__init__()
 
     @property

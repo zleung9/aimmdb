@@ -33,7 +33,11 @@ setup(
         "strawberry-graphql[fastapi]",
     ],
     python_requires="~=3.9",
-    entry_points={},
+    entry_points={
+        "tiled.structure_client": [
+            "CatalogOfMeasurements = aimmdb.client:CatalogOfMeasurements",
+        ],
+    },
     data_files=get_data_files(),
     package_data={"aimmdb": ["data/*"]},
 )
