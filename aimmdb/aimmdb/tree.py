@@ -26,8 +26,8 @@ def parse_path(path):
         "uid": "_id",
         "element": "metadata.element.symbol",
         "edge": "metadata.element.edge",
-        "sample" : "metadata.sample._id",
-        "dataset" : "metadata.sample.dataset",
+        "sample": "metadata.sample._id",
+        "dataset": "metadata.sample.dataset",
     }
     valid_keys = set(key_translation.keys())
     keys = path[0::2]
@@ -51,7 +51,10 @@ def parse_path(path):
         if "uid" in keys:
             operation = (OperationEnum("lookup"), {"select": select})
         else:
-            operation = (OperationEnum("keys"), {"keys": leftover_keys})
+            operation = (
+                OperationEnum("keys"),
+                {"keys": leftover_keys, "select": select},
+            )
     else:
         raise KeyError(f"{len(keys)=}, {len(values)=}")
 
@@ -147,10 +150,18 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
 
         self._op = parse_path(self.path)
 
-        if self._op[0] == OperationEnum.distinct and self._op[1]["distinct"] == "_id":
-            self.specs = ["CatalogOfMeasurements"]
-        else:
-            self.specs = []
+        # if we have performed a lookup on samples inject the sample metadata
+        if "metadata.sample._id" in self._op[1]["select"]:
+            sample_id = self._op[1]["select"]["metadata.sample._id"]
+            sample = self.db.samples.find_one({"_id": sample_id})
+            self._metadata["sample"] = sample
+
+        self.specs = []
+        if self._op[0] == OperationEnum.distinct:
+            if self._op[1]["distinct"] == "_id":
+                self.specs = ["CatalogOfMeasurements"]
+            elif self._op[1]["distinct"] == "metadata.sample._id":
+                self.specs = ["CatalogOfSamples"]
 
         super().__init__()
 
@@ -211,7 +222,8 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         if queries is UNCHANGED:
             queries = self.queries
         if metadata is UNCHANGED:
-            metadata = self.metadata
+            # NOTE we want to pass underlying dict instead of DictView so that it can be modified in __init__
+            metadata = self._metadata
         if path is UNCHANGED:
             path = self.path
 
@@ -353,7 +365,9 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
             limit = None
 
         if self.op[0] == OperationEnum.keys:
-            yield from [(k, self[k]) for k in list(self.op[1]["keys"])[skip : skip + limit]]
+            yield from [
+                (k, self[k]) for k in list(self.op[1]["keys"])[skip : skip + limit]
+            ]
         elif self.op[0] == OperationEnum.distinct:
             select = self.op[1]["select"]
             distinct = self.op[1]["distinct"]

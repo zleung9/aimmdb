@@ -36,6 +36,7 @@ setup(
     entry_points={
         "tiled.structure_client": [
             "CatalogOfMeasurements = aimmdb.client:CatalogOfMeasurements",
+            "CatalogOfSamples = aimmdb.client:CatalogOfSamples",
         ],
     },
     data_files=get_data_files(),
