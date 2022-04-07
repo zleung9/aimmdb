@@ -37,6 +37,7 @@ setup(
         "tiled.structure_client": [
             "CatalogOfMeasurements = aimmdb.client:CatalogOfMeasurements",
             "CatalogOfSamples = aimmdb.client:CatalogOfSamples",
+            "XAS = aimmdb.client:XASClient",
         ],
     },
     data_files=get_data_files(),

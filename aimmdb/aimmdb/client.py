@@ -1,4 +1,5 @@
 from tiled.client.node import Node
+from tiled.client.dataframe import DataFrameClient
 
 from .uid import _uid_length
 
@@ -21,6 +22,7 @@ class AnnotatedNodeBase(Node):
             k = self._annotate_key(k, v)
             yield k, v
 
+    # FIXME is now slow because we have to fetch values also in order to construct extended key
     def _keys_slice(self, start, stop, direction):
         for k, v in super()._items_slice(start, stop, direction):
             k = self._annotate_key(k, v)
@@ -50,3 +52,11 @@ class CatalogOfSamples(AnnotatedNodeBase):
     def _annotate_key(self, key, value):
         name = value.metadata["sample"]["name"]
         return f"{key} ({name})"
+
+
+class XASClient(DataFrameClient):
+    def __repr__(self):
+        element = self.metadata["element"]["symbol"]
+        edge = self.metadata["element"]["edge"]
+        name = self.metadata["sample"]["name"]
+        return f"<{type(self).__name__} ({name} {element}-{edge})>"

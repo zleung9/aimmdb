@@ -6,11 +6,11 @@ from enum import Enum
 
 import h5py
 import pymongo
-from tiled.adapters.dataframe import DataFrameAdapter
 from tiled.adapters.utils import IndexersMixin
 from tiled.query_registration import QueryTranslationRegistry, register
 from tiled.utils import UNCHANGED, DictView, ListView
 
+from .adapters import XASAdapter
 from .serialization import deserialize_parquet
 
 
@@ -246,9 +246,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         structf = doc["structure_family"]
         if structf == "dataframe":
             df = deserialize_parquet(doc["data"]["blob"])
-            return DataFrameAdapter.from_pandas(
-                df, metadata=doc["metadata"], npartitions=1
-            )
+            return XASAdapter.from_pandas(df, metadata=doc["metadata"], npartitions=1)
         else:
             raise RuntimeError(f"unhandled structure family {structf}")
 
@@ -419,7 +417,7 @@ def walk(node, pre=None):
     elif isinstance(node, collections.abc.Mapping):
         for k, v in node.items():
             yield from walk(v, pre + [k])
-    elif isinstance(node, DataFrameAdapter):
+    elif isinstance(node, XASAdapter):
         df = node.read()
         yield from walk({k: df[k].to_numpy() for k in df}, pre + ["data"])
         if node.metadata:
