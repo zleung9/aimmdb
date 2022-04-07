@@ -1,4 +1,5 @@
 import collections.abc
+import copy
 import io
 import json
 from dataclasses import dataclass
@@ -101,6 +102,8 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
     router.include_router(GQLRouter, prefix="/graphql")
     include_routers = [router]
 
+    specs = ["AIMMCatalog"]
+
     @classmethod
     def from_uri(
         cls,
@@ -139,7 +142,13 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
     ):
         self._db = db
 
-        self._metadata = metadata or {}
+        if metadata:
+            self._metadata = copy.deepcopy(metadata)
+        else:
+            self._metadata = {}
+            self._metadata["sample"] = {}
+            self._metadata["element"] = {}
+            self._metadata["_tiled"] = {}
 
         self._access_policy = access_policy
         self._principal = principal
@@ -150,18 +159,21 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
 
         self._op = parse_path(self.path)
 
+        self._metadata["_tiled"]["op"] = self._op[0].value
+
         # if we have performed a lookup on samples inject the sample metadata
         if "metadata.sample._id" in self._op[1]["select"]:
             sample_id = self._op[1]["select"]["metadata.sample._id"]
             sample = self.db.samples.find_one({"_id": sample_id})
-            self._metadata["sample"] = sample
+            self._metadata["sample"].update(sample)
 
-        self.specs = []
-        if self._op[0] == OperationEnum.distinct:
-            if self._op[1]["distinct"] == "_id":
-                self.specs = ["CatalogOfMeasurements"]
-            elif self._op[1]["distinct"] == "metadata.sample._id":
-                self.specs = ["CatalogOfSamples"]
+        if "metadata.element.symbol" in self._op[1]["select"]:
+            symbol = self._op[1]["select"]["metadata.element.symbol"]
+            self._metadata["element"]["symbol"] = symbol
+
+        if "metadata.element.edge" in self._op[1]["select"]:
+            edge = self._op[1]["select"]["metadata.element.edge"]
+            self._metadata["element"]["edge"] = edge
 
         super().__init__()
 

@@ -1,58 +1,45 @@
+import operator
+
 from tiled.client.node import Node
 from tiled.client.dataframe import DataFrameClient
 
 from .uid import _uid_length
 
-# node which appends some metadata to keys
-class AnnotatedNodeBase(Node):
-    def _annotate_key(self, key, value):
-        raise NotImplementedError
+class AIMMCatalog(Node):
+    def __repr__(self):
+        element = self.metadata["element"].get("symbol", "*")
+        edge = self.metadata["element"].get("edge", "*")
 
-    def __iter__(self):
-        for k, v in self.items():
-            yield k
+        sample_id = self.metadata["sample"].get("_id", None)
+        sample_name = self.metadata["sample"].get("name", None)
 
-    def __getitem__(self, key):
-        if isinstance(key, str):
-            key = key[:_uid_length]  # keys can have arbitrary suffixes
-        return super().__getitem__(key)
+        sample_repr = ""
+        if sample_name:
+            sample_repr = f"{sample_name} ({sample_id}) "
 
-    def items(self):
-        for k, v in super().items():
-            k = self._annotate_key(k, v)
-            yield k, v
+        out = f"<{type(self).__name__} ({sample_repr}{element}-{edge}) {{"
 
-    # FIXME is now slow because we have to fetch values also in order to construct extended key
-    def _keys_slice(self, start, stop, direction):
-        for k, v in super()._items_slice(start, stop, direction):
-            k = self._annotate_key(k, v)
-            yield k
+        N = 10
+        keys = self._keys_slice(0, N, direction=1)
+        key_reprs = list(map(repr, keys))
 
-    def _items_slice(self, start, stop, direction):
-        for k, v in super()._items_slice(start, stop, direction):
-            k = self._annotate_key(k, v)
-            yield k, v
+        if key_reprs:
+            out += key_reprs[0]
 
-    def _item_by_index(self, index, direction):
-        k, v = super()._item_by_index(index, direction)
-        k = self._annotate_key(k, v)
-        return k, v
+        counter = 1
+        for key_repr in key_reprs[1:]:
+            if len(out) + len(key_repr) > 80:
+                break
+            out += ", " + key_repr
+            counter += 1
 
-
-class CatalogOfMeasurements(AnnotatedNodeBase):
-    # append some metadata to make keys more informative
-    def _annotate_key(self, key, value):
-        element = value.metadata["element"]["symbol"]
-        edge = value.metadata["element"]["edge"]
-        name = value.metadata["sample"]["name"]
-        return f"{key} ({name} {element}-{edge})"
-
-
-class CatalogOfSamples(AnnotatedNodeBase):
-    def _annotate_key(self, key, value):
-        name = value.metadata["sample"]["name"]
-        return f"{key} ({name})"
-
+        approx_len = operator.length_hint(self)  # cheaper to compute than len(tree)
+        # Are there more in the tree that what we displayed above?
+        if approx_len > counter:
+            out += f", ...}} ~{approx_len} entries>"
+        else:
+            out += "}>"
+        return out
 
 class XASClient(DataFrameClient):
     def __repr__(self):

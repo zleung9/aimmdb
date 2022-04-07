@@ -35,8 +35,7 @@ setup(
     python_requires="~=3.9",
     entry_points={
         "tiled.structure_client": [
-            "CatalogOfMeasurements = aimmdb.client:CatalogOfMeasurements",
-            "CatalogOfSamples = aimmdb.client:CatalogOfSamples",
+            "AIMMCatalog= aimmdb.client:AIMMCatalog",
             "XAS = aimmdb.client:XASClient",
         ],
     },
