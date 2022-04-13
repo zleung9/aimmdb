@@ -30,7 +30,7 @@ authentication:
       args:
         client_id: ${ORCID_CLIENT_ID}
         client_secret: ${ORCID_CLIENT_SECRET}
-        redirect_uri: https://aimm-staging.lbl.gov/api/auth/provider/orcid/login
+        redirect_uri: https://aimm.lbl.gov/api/auth/provider/orcid/login
         public_keys:
           - kty: "RSA"
             e: "AQAB"
@@ -40,7 +40,7 @@ authentication:
             alg: RS256
         token_uri: https://orcid.org/oauth/token
         authorization_endpoint: https://orcid.org/oauth/authorize?response_type=code&scope=openid&client_id={client_id}&redirect_uri={redirect_uri}
-        confirmation_message: You have logged with ORCID.
+        confirmation_message: You have logged in with ORCID as {id}
   tiled_admins:
     - provider: orcid
       id: 0000-0003-3670-0431
