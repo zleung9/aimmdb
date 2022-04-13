@@ -165,7 +165,8 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         if "metadata.sample._id" in self._op[1]["select"]:
             sample_id = self._op[1]["select"]["metadata.sample._id"]
             sample = self.db.samples.find_one({"_id": sample_id})
-            self._metadata["sample"].update(sample)
+            if sample:
+                self._metadata["sample"].update(sample)
 
         if "metadata.element.symbol" in self._op[1]["select"]:
             symbol = self._op[1]["select"]["metadata.element.symbol"]
