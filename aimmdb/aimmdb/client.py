@@ -3,7 +3,6 @@ import operator
 from tiled.client.node import Node
 from tiled.client.dataframe import DataFrameClient
 
-from .uid import _uid_length
 
 class AIMMCatalog(Node):
     def __repr__(self):
@@ -40,6 +39,7 @@ class AIMMCatalog(Node):
         else:
             out += "}>"
         return out
+
 
 class XASClient(DataFrameClient):
     def __repr__(self):
