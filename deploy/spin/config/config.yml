@@ -46,6 +46,7 @@ authentication:
       id: 0000-0003-3670-0431
 database:
   uri: "postgresql://tiled:${TILED_DATABASE_PASSWORD}@postgres/tiled"
+  pool_size: 2
 media_types:
   node:
     application/x-hdf5: aimmdb:serialize_hdf5
