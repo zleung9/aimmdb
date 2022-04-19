@@ -3,7 +3,7 @@ FROM ghcr.io/bluesky/tiled:main as base
 FROM base as builder
 
 WORKDIR /build
-COPY aimmdb .
+COPY . .
 RUN pip install .
 
 FROM base as app
