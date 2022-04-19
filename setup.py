@@ -31,6 +31,7 @@ setup(
         "psycopg2-binary",
         "httpx",
         "strawberry-graphql[fastapi]",
+        "h5py",
     ],
     python_requires="~=3.9",
     entry_points={
