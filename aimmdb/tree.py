@@ -28,7 +28,7 @@ def parse_path(path):
         "element": "metadata.element.symbol",
         "edge": "metadata.element.edge",
         "sample": "metadata.sample._id",
-        "dataset": "metadata.sample.dataset",
+        "dataset": "metadata.dataset",
     }
     valid_keys = set(key_translation.keys())
     keys = path[0::2]

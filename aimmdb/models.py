@@ -87,7 +87,6 @@ class ProvenanceData(BaseModel):
 class SampleData(BaseModel, extra=Extra.allow):
     uid: Optional[str] = Field(alias="_id")
     name: str
-    dataset: str
     provenance: ProvenanceData
 
 
@@ -95,6 +94,7 @@ class XASMetadata(BaseModel, extra=Extra.allow):
     element: XDIElement
     measurement_type: MeasurementEnum = "xas"
     provenance: ProvenanceData
+    dataset: str  # FIXME is dataset just a tag or does it deserve to be separate
     sample_id: str
 
 
@@ -102,6 +102,7 @@ class XASMetadataDenormalized(BaseModel, extra=Extra.allow):
     element: XDIElement
     measurement_type: MeasurementEnum = "xas"
     provenance: ProvenanceData
+    dataset: str
     sample: SampleData
 
 
