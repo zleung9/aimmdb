@@ -259,7 +259,9 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         structf = doc["structure_family"]
         if structf == "dataframe":
             df = deserialize_parquet(doc["data"]["blob"])
-            return XASAdapter.from_pandas(df, metadata=doc["metadata"], npartitions=1)
+            metadata = doc["metadata"]
+            metadata.update(uid=doc["_id"])
+            return XASAdapter.from_pandas(df, metadata=metadata, npartitions=1)
         else:
             raise RuntimeError(f"unhandled structure family {structf}")
 
