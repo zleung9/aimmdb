@@ -25,13 +25,14 @@ setup(
     version="0.1",
     packages=find_packages(),
     install_requires=[
-        "tiled",
+        "tiled[all]",
         "pymongo",
         "pyarrow",
         "psycopg2-binary",
         "httpx",
         "strawberry-graphql[fastapi]",
         "h5py",
+        "msgpack",
     ],
     python_requires="~=3.9",
     entry_points={
