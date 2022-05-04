@@ -3,6 +3,11 @@ import operator
 from tiled.client.node import Node
 from tiled.client.dataframe import DataFrameClient
 
+import msgpack
+
+import aimmdb
+from aimmdb.models import SampleData, XASData
+
 
 class AIMMCatalog(Node):
     def __repr__(self):
@@ -40,6 +45,57 @@ class AIMMCatalog(Node):
             out += "}>"
         return out
 
+    def post_sample(self, metadata):
+        sample = SampleData.parse_obj(metadata)
+        request = self.context._client.build_request(
+            "POST", "/samples", json=sample.dict()
+        )
+
+        r = self.context._send(request)
+        if not r.status_code == 200:
+            print(r.json())
+            assert False
+
+        data = r.json()
+        if "uid" in data:
+            sample_id = data["uid"]
+        else:
+            raise RuntimeError(data)
+
+        return sample_id
+
+    def delete_sample(self, uid):
+        request = self.context._client.build_request("DELETE", f"/samples/{uid}")
+        r = self.context._send(request)
+        if not r.status_code == 200:
+            assert False
+
+    def post_xas(self, df, metadata):
+        data = aimmdb.models.DataFrameData.from_pandas(df)
+
+        measurement = aimmdb.models.XASData(
+            structure_family="dataframe",
+            metadata=metadata,
+            data=data,
+        )
+
+        request = self.context._client.build_request(
+            "POST",
+            "/xas",
+            content=msgpack.packb(measurement.dict()),
+            headers={"content-type": "application/msgpack"},
+        )
+
+        r = self.context._send(request)
+        if not r.status_code == 200:
+            assert False
+
+    def delete_xas(self, uid):
+        request = self.context._client.build_request("DELETE", f"/xas/{uid}")
+        r = self.context._send(request)
+        if not r.status_code == 200:
+            assert False
+
 
 class XASClient(DataFrameClient):
     def __repr__(self):
@@ -47,3 +103,7 @@ class XASClient(DataFrameClient):
         edge = self.metadata["element"]["edge"]
         name = self.metadata["sample"]["name"]
         return f"<{type(self).__name__} ({name} {element}-{edge})>"
+
+    @property
+    def uid(self):
+        return self.metadata["uid"]
