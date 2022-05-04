@@ -42,6 +42,19 @@ def post_sample(
     return {"uid": str(r.inserted_id)}
 
 
+@router.delete("/samples/{uid}", dependencies=[Depends(has_write_permission)])
+def delete_sample(
+    uid: str,
+    root=Depends(get_root_tree),
+):
+    r = root.db.samples.delete_one({"_id": uid})
+    if r.deleted_count != 1:
+        raise HTTPException(status_code=404, detail=f"sample uid {uid} not found")
+
+    r = root.db.measurements.delete_many({"metadata.sample._id": uid})
+    return None
+
+
 @router.post(
     "/xas", dependencies=[Depends(has_write_permission), Depends(application_msgpack)]
 )
@@ -70,3 +83,13 @@ async def post_xas(
 
     r = root.db.measurements.insert_one(xas_denormalized.dict(by_alias=True))
     return {"uid": str(r.inserted_id)}
+
+
+@router.delete("/xas/{uid}", dependencies=[Depends(has_write_permission)])
+def delete_sample(
+    uid: str,
+    root=Depends(get_root_tree),
+):
+    r = root.db.measurements.delete_one({"_id": uid})
+    if r.deleted_count != 1:
+        raise HTTPException(status_code=404, detail=f"sample uid {uid} not found")
