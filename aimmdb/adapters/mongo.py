@@ -1,19 +1,20 @@
 import collections.abc
 import os
 import uuid
+import json
 from pathlib import Path
 
 import pymongo
 from tiled.adapters.utils import IndexersMixin, tree_repr
-from tiled.query_registration import QueryTranslationRegistry, register
+from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import (APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView,
-                         ListView)
+from tiled.utils import APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView, ListView
 
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
 from aimmdb.models import Document
+from aimmdb.queries import RawMongo
 
 _mime_structure_association = {
     StructureFamily.array: "application/x-hdf5",
@@ -144,8 +145,9 @@ class MongoAdapterBase:
     def sort(self, sorting):
         return self.new_variation(sorting=sorting)
 
+    # override in subclass
     def uid(self):
-        return str(uuid.uuid4())
+        raise NotImplementedError
 
     def post_metadata(self, metadata, structure_family, structure, specs):
 
@@ -178,6 +180,9 @@ class MongoAdapterBase:
 
 
 class MongoAdapter(MongoAdapterBase, collections.abc.Mapping, IndexersMixin):
+    def uid(self):
+        return str(uuid.uuid4())
+
     def __len__(self):
         return self.metadata_collection.count_documents(
             # self._build_mongo_query({"active": True})
@@ -274,3 +279,11 @@ class MongoAdapter(MongoAdapterBase, collections.abc.Mapping, IndexersMixin):
     def _item_by_index(self, index, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
         return self._items_slice(index, index + 1, 1)
+
+
+def run_raw_mongo_query(query, tree):
+    query = json.loads(query.query)
+    return tree.new_variation(queries=tree.queries + [query])
+
+
+MongoAdapter.register_query(RawMongo, run_raw_mongo_query)

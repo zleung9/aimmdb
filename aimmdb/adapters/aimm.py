@@ -62,19 +62,19 @@ def parse_path(path):
     return operation
 
 
-@register(name="raw_mongo")
-@dataclass
-class RawMongoQuery:
-    """
-    Run a MongoDB query against a given collection.
-    """
-
-    query: str  # We cannot put a dict in a URL, so this a JSON str.
-
-    def __init__(self, query):
-        if isinstance(query, collections.abc.Mapping):
-            query = json.dumps(query)
-        self.query = query
+#@register(name="raw_mongo")
+#@dataclass
+#class RawMongoQuery:
+#    """
+#    Run a MongoDB query against a given collection.
+#    """
+#
+#    query: str  # We cannot put a dict in a URL, so this a JSON str.
+#
+#    def __init__(self, query):
+#        if isinstance(query, collections.abc.Mapping):
+#            query = json.dumps(query)
+#        self.query = query
 
 
 def _get_database(uri, username, password):
@@ -413,12 +413,12 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         return self
 
 
-def run_raw_mongo_query(query, tree):
-    query = json.loads(query.query)
-    return tree.new_variation(queries=tree._queries + [query])
-
-
-AIMMTree.register_query(RawMongoQuery, run_raw_mongo_query)
+#def run_raw_mongo_query(query, tree):
+#    query = json.loads(query.query)
+#    return tree.new_variation(queries=tree._queries + [query])
+#
+#
+#AIMMTree.register_query(RawMongoQuery, run_raw_mongo_query)
 
 
 def walk(node, pre=None):

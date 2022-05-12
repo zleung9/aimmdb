@@ -1,14 +1,12 @@
 # NOTE these routes are all meant to be upstreamed into tiled
 
 import base64
-from typing import Dict, List, Union
+from typing import Dict, List
 
 import pydantic
 from fastapi import APIRouter, Request, Security
 from tiled.server.core import json_or_msgpack
 from tiled.server.dependencies import entry
-from tiled.server.pydantic_array import ArrayStructure
-from tiled.server.pydantic_dataframe import DataFrameStructure
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import deserialize_arrow
 from tiled.server.schemas import Structure
