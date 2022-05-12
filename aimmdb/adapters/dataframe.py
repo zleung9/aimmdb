@@ -91,3 +91,9 @@ class WritingDataFrameAdapter:
 
         assert result.matched_count == 1
         assert result.modified_count == 1
+
+    def delete(self):
+        path = self.directory / self.doc.uid[:2] / self.doc.uid
+        os.remove(path)
+        result = self.metadata_collection.delete_one({"_id" : self.doc.uid})
+        assert result.deleted_count == 1
