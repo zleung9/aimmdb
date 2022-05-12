@@ -21,6 +21,8 @@ class AIMMAccessPolicy:
     def get_id(self, principal):
         # Get the id (i.e. username) of this Principal for the
         # associated authentication provider.
+
+        # FIXME handle SpecialUsers.public/SpecialUsers.admin
         for identity in principal.identities:
             if identity.provider == self.provider:
                 return identity.id
