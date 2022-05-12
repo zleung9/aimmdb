@@ -11,11 +11,12 @@ from tiled.server.pydantic_array import ArrayStructure
 from tiled.server.pydantic_dataframe import DataFrameStructure
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import deserialize_arrow
+from tiled.server.schemas import Structure
 
 
 class PostMetadataRequest(pydantic.BaseModel):
     structure_family: StructureFamily
-    structure: Union[ArrayStructure, DataFrameStructure]
+    structure: Structure
     metadata: Dict
     specs: List[str]
 
@@ -34,10 +35,9 @@ def post_metadata(
     entry=Security(entry, scopes=["write:data", "write:metadata"]),
 ):
     if body.structure_family == StructureFamily.dataframe:
-        # Decode meta for pydantic validation
-        body.structure.micro.meta = deserialize_arrow(
-            base64.b64decode(body.structure.micro.meta)
-        )
+        # Decode meta
+        meta = body.structure.micro["meta"]
+        body.structure.micro["meta"] = deserialize_arrow(base64.b64decode(meta))
 
     uid = entry.post_metadata(
         metadata=body.metadata,
