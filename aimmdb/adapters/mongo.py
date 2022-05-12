@@ -1,6 +1,5 @@
 import collections.abc
 import os
-import uuid
 import json
 from pathlib import Path
 
@@ -15,6 +14,7 @@ from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
 from aimmdb.models import Document
 from aimmdb.queries import RawMongo
+from aimmdb.uid import uid
 
 _mime_structure_association = {
     StructureFamily.array: "application/x-hdf5",
@@ -181,7 +181,7 @@ class MongoAdapterBase:
 
 class MongoAdapter(MongoAdapterBase, collections.abc.Mapping, IndexersMixin):
     def uid(self):
-        return str(uuid.uuid4())
+        return uid()
 
     def __len__(self):
         return self.metadata_collection.count_documents(
