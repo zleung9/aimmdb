@@ -7,7 +7,7 @@ import numpy as np
 from tiled.adapters.array import ArrayAdapter
 from tiled.server.pydantic_array import ArrayStructure
 
-from aimmdb.models import Document
+from aimmdb.schemas import Document
 
 
 def array_raise_if_inactive(method):

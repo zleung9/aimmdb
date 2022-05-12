@@ -7,7 +7,7 @@ from tiled.adapters.dataframe import DataFrameAdapter
 from tiled.server.pydantic_dataframe import DataFrameStructure
 from tiled.structures.dataframe import deserialize_arrow
 
-from aimmdb.models import Document
+from aimmdb.schemas import Document
 
 
 def dataframe_raise_if_inactive(method):

@@ -62,9 +62,9 @@ def parse_path(path):
     return operation
 
 
-#@register(name="raw_mongo")
-#@dataclass
-#class RawMongoQuery:
+# @register(name="raw_mongo")
+# @dataclass
+# class RawMongoQuery:
 #    """
 #    Run a MongoDB query against a given collection.
 #    """
@@ -413,12 +413,12 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         return self
 
 
-#def run_raw_mongo_query(query, tree):
+# def run_raw_mongo_query(query, tree):
 #    query = json.loads(query.query)
 #    return tree.new_variation(queries=tree._queries + [query])
 #
 #
-#AIMMTree.register_query(RawMongoQuery, run_raw_mongo_query)
+# AIMMTree.register_query(RawMongoQuery, run_raw_mongo_query)
 
 
 def walk(node, pre=None):

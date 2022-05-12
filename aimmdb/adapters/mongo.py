@@ -1,6 +1,6 @@
 import collections.abc
-import os
 import json
+import os
 from pathlib import Path
 
 import pymongo
@@ -8,12 +8,13 @@ from tiled.adapters.utils import IndexersMixin, tree_repr
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView, ListView
+from tiled.utils import (APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView,
+                         ListView)
 
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
-from aimmdb.models import Document
 from aimmdb.queries import RawMongo
+from aimmdb.schemas import Document
 from aimmdb.uid import uid
 
 _mime_structure_association = {

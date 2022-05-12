@@ -5,7 +5,7 @@ from tiled.client.dataframe import DataFrameClient
 from tiled.client.node import Node
 
 import aimmdb
-from aimmdb.models import SampleData
+from aimmdb.schemas import SampleData
 
 
 class AIMMCatalog(Node):

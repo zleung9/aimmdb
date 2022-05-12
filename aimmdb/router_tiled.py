@@ -7,9 +7,9 @@ import pydantic
 from fastapi import APIRouter, Request, Security
 from tiled.server.core import json_or_msgpack
 from tiled.server.dependencies import entry
+from tiled.server.schemas import Structure
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import deserialize_arrow
-from tiled.server.schemas import Structure
 
 
 class PostMetadataRequest(pydantic.BaseModel):
@@ -20,7 +20,7 @@ class PostMetadataRequest(pydantic.BaseModel):
 
 
 class PostMetadataResponse(pydantic.BaseModel):
-    loc: str
+    uid: str
 
 
 router = APIRouter()
@@ -65,3 +65,8 @@ async def put_dataframe_full(
     data = await request.body()
     entry.put_data(data)
     return json_or_msgpack(request, None)
+
+
+# TODO /dataframe/partition
+# TODO /array/block
+# TODO xarray
