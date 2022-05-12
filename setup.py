@@ -33,11 +33,13 @@ setup(
         "strawberry-graphql[fastapi]",
         "h5py",
         "msgpack",
+        "mongomock",
     ],
     python_requires="~=3.9",
     entry_points={
         "tiled.structure_client": [
-            "AIMMCatalog= aimmdb.client:AIMMCatalog",
+            "MongoAdapter = aimmdb.client:MongoCatalog",
+            "AIMMCatalog = aimmdb.client:AIMMCatalog",
             "XAS = aimmdb.client:XASClient",
         ],
     },
