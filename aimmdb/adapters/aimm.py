@@ -11,8 +11,8 @@ from tiled.adapters.utils import IndexersMixin
 from tiled.query_registration import QueryTranslationRegistry, register
 from tiled.utils import UNCHANGED, DictView, ListView
 
-from .adapters import XASAdapter
-from .serialization import deserialize_parquet
+from aimmdb.adapters.xas import XASAdapter
+from aimmdb.serialization import deserialize_parquet
 
 
 class OperationEnum(str, Enum):
@@ -96,8 +96,8 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
     register_query = query_registry.register
     register_query_lazy = query_registry.register_lazy
 
-    from .graphql import GQLRouter
-    from .router import router
+    from aimmdb.graphql import GQLRouter
+    from aimmdb.router_tiled import router
 
     router.include_router(GQLRouter, prefix="/graphql")
     include_routers = [router]

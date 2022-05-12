@@ -1,12 +1,11 @@
 import operator
 
-from tiled.client.node import Node
-from tiled.client.dataframe import DataFrameClient
-
 import msgpack
+from tiled.client.dataframe import DataFrameClient
+from tiled.client.node import Node
 
 import aimmdb
-from aimmdb.models import SampleData, XASData
+from aimmdb.models import SampleData
 
 
 class AIMMCatalog(Node):
