@@ -181,6 +181,8 @@ class MongoAdapterBase:
 
 
 class MongoAdapter(MongoAdapterBase, collections.abc.Mapping, IndexersMixin):
+    specs = ["MongoAdapter"]
+
     def uid(self):
         return uid()
 
