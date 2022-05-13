@@ -66,7 +66,7 @@ async def put_dataframe_full(
     entry.put_data(data)
     return json_or_msgpack(request, None)
 
-@router.delete("/delete/{path:path}")
+@router.delete("/node/delete/{path:path}")
 async def delete(
     request: Request,
     entry=Security(entry, scopes=["write:data", "write:metadata"]),

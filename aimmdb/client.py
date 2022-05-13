@@ -10,7 +10,7 @@ import aimmdb
 class MongoCatalog(Node):
     def __delitem__(self, key):
         path = (
-            "/delete/"
+            "/node/delete/"
             + "".join(f"/{part}" for part in self.context.path_parts) #FIXME this should be a prefix
             + "".join(f"/{part}" for part in self._path)
             + "/"
