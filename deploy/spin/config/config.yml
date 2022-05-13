@@ -1,27 +1,27 @@
 trees:
   - path: /
-    tree: aimmdb:AIMMTree.from_uri
+    tree: aimmdb.adapters.mongo:MongoAdapter.from_uri
     args:
-      uri: ${MONGO_URI}
-      username: root
-      password: ${MONGO_PASSWORD}
+      uri: mongodb://root:${MONGO_PASSWORD}@mongodb:27017/aimm?authSource=admin
+      metadata_collection: metadata
+      data_directory: /data
     access_control:
-      access_policy: aimmdb:AIMMAccessPolicy
+      access_policy: aimmdb.access:AIMMAccessPolicy
       args:
         provider: orcid
         access_lists:
-          0000-0002-5947-6017: aimmdb:AIMMAccessPolicy.READ  # Dan sees all
-          0000-0003-3670-0431: aimmdb:AIMMAccessPolicy.READWRITE  # Joe sees all
-          0000-0002-1539-0297: aimmdb:AIMMAccessPolicy.READ  # Dylan sees all
-          0000-0002-3337-2930: aimmdb:AIMMAccessPolicy.READ  # Eli sees all
-          0000-0002-5269-0125: aimmdb:AIMMAccessPolicy.READ  # Alex sees all
-          0000-0003-4351-6085: aimmdb:AIMMAccessPolicy.READ  # Deyu sees all
-          0000-0003-0666-8063: aimmdb:AIMMAccessPolicy.READ  # Wanli sees all
-          0000-0001-5266-5408: aimmdb:AIMMAccessPolicy.READ  # Zhu sees all
-          0000-0002-2473-0193: aimmdb:AIMMAccessPolicy.READ  # Juan sees all
-          0000-0003-0922-1363: aimmdb:AIMMAccessPolicy.READ  # Maria sees all
-          0000-0002-5181-9513: aimmdb:AIMMAccessPolicy.READ  # Matt sees all
-          0000-0001-5651-8405: aimmdb:AIMMAccessPolicy.READ  # Xiaohui sees all
+          0000-0002-5947-6017: aimmdb.access:AIMMAccessPolicy.READ  # Dan sees all
+          0000-0003-3670-0431: aimmdb.access:AIMMAccessPolicy.READWRITE  # Joe sees all
+          0000-0002-1539-0297: aimmdb.access:AIMMAccessPolicy.READ  # Dylan sees all
+          0000-0002-3337-2930: aimmdb.access:AIMMAccessPolicy.READ  # Eli sees all
+          0000-0002-5269-0125: aimmdb.access:AIMMAccessPolicy.READ  # Alex sees all
+          0000-0003-4351-6085: aimmdb.access:AIMMAccessPolicy.READ  # Deyu sees all
+          0000-0003-0666-8063: aimmdb.access:AIMMAccessPolicy.READ  # Wanli sees all
+          0000-0001-5266-5408: aimmdb.access:AIMMAccessPolicy.READ  # Zhu sees all
+          0000-0002-2473-0193: aimmdb.access:AIMMAccessPolicy.READ  # Juan sees all
+          0000-0003-0922-1363: aimmdb.access:AIMMAccessPolicy.READ  # Maria sees all
+          0000-0002-5181-9513: aimmdb.access:AIMMAccessPolicy.READ  # Matt sees all
+          0000-0001-5651-8405: aimmdb.access:AIMMAccessPolicy.READ  # Xiaohui sees all
 authentication:
   allow_anonymous_access: false
   providers:
@@ -46,10 +46,7 @@ authentication:
       id: 0000-0003-3670-0431
 database:
   uri: "postgresql://tiled:${TILED_DATABASE_PASSWORD}@postgres/tiled"
-  pool_size: 2
-media_types:
-  node:
-    application/x-hdf5: aimmdb:serialize_hdf5
+  pool_size: 5
 uvicorn:
   host: 0.0.0.0
   port: 8000
