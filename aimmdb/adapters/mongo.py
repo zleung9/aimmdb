@@ -8,8 +8,7 @@ from tiled.adapters.utils import IndexersMixin, tree_repr
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import (APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView,
-                         ListView)
+from tiled.utils import APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView, ListView
 
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
@@ -23,9 +22,9 @@ _mime_structure_association = {
 }
 
 
-# Generic mongo adapter adapted from databroker
-class MongoAdapterBase:
+class MongoAdapter(collections.abc.Mapping, IndexersMixin):
     structure_family = "node"
+    specs = ["MongoAdapter"]
 
     query_registry = QueryTranslationRegistry()
     register_query = query_registry.register
@@ -179,10 +178,6 @@ class MongoAdapterBase:
             return {"$and": combined}
         else:
             return {}
-
-
-class MongoAdapter(MongoAdapterBase, collections.abc.Mapping, IndexersMixin):
-    specs = ["MongoAdapter"]
 
     def uid(self):
         return uid()
