@@ -74,7 +74,7 @@ class WritingArrayAdapter:
             file.create_dataset("data", data=array)
 
         result = self.metadata_collection.update_one(
-            {"_id": self.doc.uid},
+            {"uid": self.doc.uid},
             {
                 "$set": {
                     "data_url": f"file://localhost/{str(path).replace(os.sep, '/')}"
@@ -88,5 +88,5 @@ class WritingArrayAdapter:
     def delete(self):
         path = self.directory / self.doc.uid[:2] / f"{self.doc.uid}.hdf5"
         os.remove(path)
-        result = self.metadata_collection.delete_one({"_id" : self.doc.uid})
+        result = self.metadata_collection.delete_one({"uid" : self.doc.uid})
         assert result.deleted_count == 1

@@ -39,7 +39,7 @@ class MongoAdapterBase:
     def __init__(
         self,
         *,
-        metadata_collection,
+        metadata_db,
         data_directory,
         queries=None,
         sorting=None,
@@ -47,7 +47,6 @@ class MongoAdapterBase:
         principal=None,
         access_policy=None,
     ):
-        self.metadata_collection = metadata_collection
         self.data_directory = Path(data_directory).resolve()
         if not self.data_directory.exists():
             raise ValueError(f"Directory {self.data_directory} does not exist.")
@@ -57,6 +56,10 @@ class MongoAdapterBase:
             )
         if not os.access(self.data_directory, os.W_OK):
             raise ValueError("Directory {self.directory} is not writeable.")
+
+        self.metadata_db = metadata_db
+        self.metadata_collection = metadata_db.get_collection("metadata")
+
         self.queries = queries or []
         self.sorting = sorting or []
         self.metadata = metadata or {}
@@ -68,7 +71,6 @@ class MongoAdapterBase:
     def from_uri(
         cls,
         uri,
-        metadata_collection,
         data_directory,
         *,
         metadata=None,
@@ -78,10 +80,10 @@ class MongoAdapterBase:
             raise ValueError(
                 f"Invalid URI: {uri!r} " f"Did you forget to include a database?"
             )
-        client = pymongo.MongoClient(uri)
-        database = client.get_database()
+        metadata_db = pymongo.MongoClient(uri).get_database()
+
         return cls(
-            metadata_collection=database[metadata_collection],
+            metadata_db=metadata_db,
             data_directory=data_directory,
             metadata=metadata,
             access_policy=access_policy,
@@ -92,11 +94,10 @@ class MongoAdapterBase:
         import mongomock
 
         mongo_client = mongomock.MongoClient()
-        db = mongo_client["test"]
-        metadata_collection = db["test"]
+        metadata_db = mongo_client["test"]
 
         return cls(
-            metadata_collection=metadata_collection,
+            metadata_db=metadata_db,
             data_directory=data_directory,
             metadata=metadata,
         )
@@ -127,7 +128,7 @@ class MongoAdapterBase:
         if principal is UNCHANGED:
             principal = self.principal
         return type(self)(
-            metadata_collection=self.metadata_collection,
+            metadata_db=self.metadata_db,
             data_directory=self.data_directory,
             metadata=metadata,
             queries=queries,
@@ -169,7 +170,7 @@ class MongoAdapterBase:
                 serialize_arrow(validated_document.structure.micro.meta, {})
             )
 
-        self.metadata_collection.insert_one(validated_document.dict(by_alias=True))
+        self.metadata_collection.insert_one(validated_document.dict())
         return uid
 
     def _build_mongo_query(self, *queries):
@@ -206,7 +207,7 @@ class MongoAdapter(MongoAdapterBase, collections.abc.Mapping, IndexersMixin):
         return tree_repr(self, self._keys_slice(0, N, direction=1))
 
     def __getitem__(self, key):
-        query = {"_id": key}
+        query = {"uid": key}
         doc = self.metadata_collection.find_one(self._build_mongo_query(query))
         if doc is None:
             raise KeyError(key)
@@ -228,10 +229,10 @@ class MongoAdapter(MongoAdapterBase, collections.abc.Mapping, IndexersMixin):
             self.metadata_collection.find(
                 # self._build_mongo_query({"active": True}), {"uid": True}
                 self._build_mongo_query({"data_url": {"$ne": None}}),
-                {"_id": True},
+                {"_id": False},
             )
         ):
-            yield doc["_id"]
+            yield doc["uid"]
 
     def _keys_slice(self, start, stop, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
@@ -246,7 +247,7 @@ class MongoAdapter(MongoAdapterBase, collections.abc.Mapping, IndexersMixin):
             skip=skip,
             limit=limit,
         ):
-            yield doc["_id"]
+            yield doc["uid"]
 
     def _items_slice(self, start, stop, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
@@ -264,14 +265,14 @@ class MongoAdapter(MongoAdapterBase, collections.abc.Mapping, IndexersMixin):
         ):
             if doc["structure_family"] == StructureFamily.array:
                 yield (
-                    doc["_id"],
+                    doc["uid"],
                     WritingArrayAdapter(
                         self.metadata_collection, self.data_directory, doc
                     ),
                 )
             elif doc["structure_family"] == StructureFamily.dataframe:
                 yield (
-                    doc["_id"],
+                    doc["uid"],
                     WritingDataFrameAdapter(
                         self.metadata_collection, self.data_directory, doc
                     ),

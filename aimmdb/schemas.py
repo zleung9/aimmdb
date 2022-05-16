@@ -22,7 +22,7 @@ class Document(pydantic.BaseModel):
     class Config:
         allow_population_by_field_name = True
 
-    uid: Optional[str] = pydantic.Field(alias="_id")
+    uid: Optional[str]
     structure_family: StructureFamily
     structure: Union[ArrayStructure, DataFrameStructure]
     metadata: Dict
