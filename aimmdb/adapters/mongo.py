@@ -2,6 +2,7 @@ import collections.abc
 import json
 import os
 from pathlib import Path
+from typing import Dict
 
 import pymongo
 from tiled.adapters.utils import IndexersMixin, tree_repr
@@ -14,13 +15,14 @@ import aimmdb.uid
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
 from aimmdb.queries import RawMongo
-from aimmdb.schemas import Document
+from aimmdb.schemas import GenericDocument
 
 _mime_structure_association = {
     StructureFamily.array: "application/x-hdf5",
     StructureFamily.dataframe: APACHE_ARROW_FILE_MIME_TYPE,
 }
 
+Document = GenericDocument[Dict]
 
 class MongoAdapter(collections.abc.Mapping, IndexersMixin):
     structure_family = "node"
@@ -171,11 +173,11 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
     def _build_node_from_doc(self, doc):
         if doc["structure_family"] == StructureFamily.array:
             return WritingArrayAdapter(
-                self.metadata_collection, self.data_directory, doc
+                self.metadata_collection, self.data_directory, Document.parse_obj(doc)
             )
         elif doc["structure_family"] == StructureFamily.dataframe:
             return WritingDataFrameAdapter(
-                self.metadata_collection, self.data_directory, doc
+                self.metadata_collection, self.data_directory, Document.parse_obj(doc)
             )
         else:
             raise ValueError("Unsupported Structure Family value in the databse")

@@ -7,9 +7,6 @@ from tiled.adapters.dataframe import DataFrameAdapter
 from tiled.server.pydantic_dataframe import DataFrameStructure
 from tiled.structures.dataframe import deserialize_arrow
 
-from aimmdb.schemas import Document
-
-
 def dataframe_raise_if_inactive(method):
     def inner(self, *args, **kwargs):
         if self.dataframe_adapter is None:
@@ -27,7 +24,7 @@ class WritingDataFrameAdapter:
     def __init__(self, metadata_collection, directory, doc):
         self.metadata_collection = metadata_collection
         self.directory = directory
-        self.doc = Document(**doc)
+        self.doc = doc
         self.dataframe_adapter = None
 
         if self.doc.data_url is not None:

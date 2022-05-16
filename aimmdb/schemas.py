@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Dict, List, Optional, Union
+from typing import TypeVar, Generic, Dict, List, Optional, Union
 
 import pydantic
 import pydantic.generics
@@ -17,15 +17,13 @@ structure_association = {
     StructureFamily.xarray_dataset: DatasetStructure,
 }
 
+MetadataT = TypeVar('MetadataT')
 
-class Document(pydantic.BaseModel):
-    class Config:
-        allow_population_by_field_name = True
-
+class GenericDocument(pydantic.generics.GenericModel, Generic[MetadataT]):
     uid: Optional[str]
     structure_family: StructureFamily
     structure: Union[ArrayStructure, DataFrameStructure]
-    metadata: Dict
+    metadata: MetadataT
     specs: List[str]
     mimetype: str
     data_blob: Optional[bytes]

@@ -7,8 +7,6 @@ import numpy as np
 from tiled.adapters.array import ArrayAdapter
 from tiled.server.pydantic_array import ArrayStructure
 
-from aimmdb.schemas import Document
-
 
 def array_raise_if_inactive(method):
     def inner(self, *args, **kwargs):
@@ -26,7 +24,7 @@ class WritingArrayAdapter:
     def __init__(self, metadata_collection, directory, doc):
         self.metadata_collection = metadata_collection
         self.directory = directory
-        self.doc = Document(**doc)
+        self.doc = doc
         self.array_adapter = None
         if self.doc.data_url is not None:
             path = self.doc.data_url.path
