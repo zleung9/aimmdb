@@ -56,8 +56,7 @@ async def put_array_full(
     return json_or_msgpack(request, None)
 
 
-# FIXME should this become /node/full?
-@router.put("/dataframe/full/{path:path}")
+@router.put("/node/full/{path:path}")
 async def put_dataframe_full(
     request: Request,
     entry=Security(entry, scopes=["write:data", "write:metadata"]),
