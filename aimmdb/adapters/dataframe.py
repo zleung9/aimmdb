@@ -20,6 +20,7 @@ def dataframe_raise_if_inactive(method):
     return inner
 
 
+#FIXME write specs
 class WritingDataFrameAdapter:
     structure_family = "dataframe"
 
@@ -48,6 +49,10 @@ class WritingDataFrameAdapter:
     #                    npartitions=self.doc.structure.macro.npartitions,
     #                )
     #            )
+
+    @property
+    def specs(self):
+        return self.doc.specs
 
     @property
     def structure(self):

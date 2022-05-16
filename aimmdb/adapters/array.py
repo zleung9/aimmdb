@@ -41,6 +41,10 @@ class WritingArrayAdapter:
     #            self.array_adapter = ArrayAdapter(dask.array.from_array(self.doc.data_blob))
 
     @property
+    def specs(self):
+        return self.doc.specs
+
+    @property
     def structure(self):
         return ArrayStructure.from_json(self.doc.structure)
 
