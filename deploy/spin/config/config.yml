@@ -3,7 +3,6 @@ trees:
     tree: aimmdb.adapters.mongo:MongoAdapter.from_uri
     args:
       uri: mongodb://root:${MONGO_PASSWORD}@mongodb:27017/aimm?authSource=admin
-      metadata_collection: metadata
       data_directory: /data
     access_control:
       access_policy: aimmdb.access:AIMMAccessPolicy
@@ -30,7 +29,7 @@ authentication:
       args:
         client_id: ${ORCID_CLIENT_ID}
         client_secret: ${ORCID_CLIENT_SECRET}
-        redirect_uri: https://aimm.lbl.gov/api/auth/provider/orcid/login
+        redirect_uri: https://aimm-staging.lbl.gov/api/auth/provider/orcid/login
         public_keys:
           - kty: "RSA"
             e: "AQAB"

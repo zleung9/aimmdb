@@ -1,17 +1,16 @@
 trees:
   - path: /
-    tree: aimmdb:AIMMTree.from_uri
+    tree: aimmdb.adapters.mongo:MongoAdapter.from_uri
     args:
-      uri: ${MONGO_URI}
-      username: root
-      password: ${MONGO_PASSWORD}
+      uri: mongodb://root:${MONGO_PASSWORD}@localhost:27017/aimm?authSource=admin
+      data_directory: ./data
     access_control:
-      access_policy: aimmdb:AIMMAccessPolicy
+      access_policy: aimmdb.access:AIMMAccessPolicy
       args:
         provider: toy
         access_lists:
-          joe: aimmdb:AIMMAccessPolicy.READWRITE
-          dan: aimmdb:AIMMAccessPolicy.READ
+          joe: aimmdb.access:AIMMAccessPolicy.READWRITE
+          dan: aimmdb.access:AIMMAccessPolicy.READ
 authentication:
   allow_anonymous_access: false
   providers:
@@ -24,8 +23,3 @@ authentication:
   tiled_admins:
     - provider: toy
       id: joe
-media_types:
-  node:
-    application/x-hdf5: aimmdb:serialize_hdf5
-allow_origins:
-  - '*'
