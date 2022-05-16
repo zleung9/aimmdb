@@ -10,11 +10,11 @@ from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
 from tiled.utils import APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView, ListView
 
+import aimmdb.uid
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
 from aimmdb.queries import RawMongo
 from aimmdb.schemas import Document
-from aimmdb.uid import uid
 
 _mime_structure_association = {
     StructureFamily.array: "application/x-hdf5",
@@ -146,13 +146,9 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
     def sort(self, sorting):
         return self.new_variation(sorting=sorting)
 
-    # override in subclass
-    def uid(self):
-        raise NotImplementedError
-
     def post_metadata(self, metadata, structure_family, structure, specs):
 
-        uid = self.uid()
+        uid = aimmdb.uid.uid()
 
         validated_document = Document(
             uid=uid,
@@ -172,15 +168,25 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
         self.metadata_collection.insert_one(validated_document.dict())
         return uid
 
+    def _build_node_from_doc(self, doc):
+        if doc["structure_family"] == StructureFamily.array:
+            return WritingArrayAdapter(
+                self.metadata_collection, self.data_directory, doc
+            )
+        elif doc["structure_family"] == StructureFamily.dataframe:
+            return WritingDataFrameAdapter(
+                self.metadata_collection, self.data_directory, doc
+            )
+        else:
+            raise ValueError("Unsupported Structure Family value in the databse")
+
+
     def _build_mongo_query(self, *queries):
         combined = self.queries + list(queries)
         if combined:
             return {"$and": combined}
         else:
             return {}
-
-    def uid(self):
-        return uid()
 
     def __len__(self):
         return self.metadata_collection.count_documents(
@@ -207,16 +213,7 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
         if doc is None:
             raise KeyError(key)
 
-        if doc["structure_family"] == StructureFamily.array:
-            return WritingArrayAdapter(
-                self.metadata_collection, self.data_directory, doc
-            )
-        elif doc["structure_family"] == StructureFamily.dataframe:
-            return WritingDataFrameAdapter(
-                self.metadata_collection, self.data_directory, doc
-            )
-        else:
-            raise ValueError("Unsupported Structure Family value in the databse")
+        return self._build_node_from_doc(doc)
 
     def __iter__(self):
         # TODO Apply pagination, as we do in Databroker.
@@ -258,22 +255,7 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
             skip=skip,
             limit=limit,
         ):
-            if doc["structure_family"] == StructureFamily.array:
-                yield (
-                    doc["uid"],
-                    WritingArrayAdapter(
-                        self.metadata_collection, self.data_directory, doc
-                    ),
-                )
-            elif doc["structure_family"] == StructureFamily.dataframe:
-                yield (
-                    doc["uid"],
-                    WritingDataFrameAdapter(
-                        self.metadata_collection, self.data_directory, doc
-                    ),
-                )
-            else:
-                raise ValueError("Unsupported Structure Family value in the databse")
+            yield (doc["uid"], self._build_node_from_doc(doc))
 
     def _item_by_index(self, index, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
