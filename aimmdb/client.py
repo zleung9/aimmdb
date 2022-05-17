@@ -1,3 +1,5 @@
+from typing import List, Optional
+
 import operator
 
 import msgpack
@@ -6,6 +8,7 @@ from tiled.client.node import Node
 from tiled.client.utils import handle_error
 
 import aimmdb
+from aimmdb.schemas import XASMetadata
 
 class MongoCatalog(Node):
     def __delitem__(self, key):
@@ -34,6 +37,59 @@ class MongoCatalog(Node):
             response.content,
             timestamp=3,  # Decode msgpack Timestamp as datetime.datetime object.
         )
+
+class AIMMCatalog(Node):
+    def __delitem__(self, key):
+        path = (
+            "/node/delete/"
+            + "".join(f"/{part}" for part in self.context.path_parts) #FIXME this should be a prefix
+            + "".join(f"/{part}" for part in self._path)
+            + "/"
+            + key
+        )
+
+        # Submit CSRF token in both header and cookie.
+        # https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#double-submit-cookie
+        headers = {}
+        headers.setdefault("x-csrf", self.context._client.cookies["tiled_csrf"])
+        headers.setdefault("accept", "application/x-msgpack")
+        request = self.context._client.build_request(
+            "DELETE",
+            path,
+            content=None,
+            headers=headers,
+        )
+        response = self.context._client.send(request)
+        handle_error(response)
+        return msgpack.unpackb(
+            response.content,
+            timestamp=3,  # Decode msgpack Timestamp as datetime.datetime object.
+        )
+
+    def write_xas(self, df, metadata, specs=None):
+        specs = list(specs or [])
+        specs.append("XAS")
+
+        validated_metadata = XASMetadata.parse_obj(metadata)
+        self.write_dataframe(df, validated_metadata.dict(), specs=specs)
+
+class XASClient(DataFrameClient):
+    def __repr__(self):
+        # this metadata are required
+        element = self.metadata["element"]["symbol"]
+        edge = self.metadata["element"]["edge"]
+        desc = f"{element}-{edge}"
+
+        # sample name is optional
+        try:
+            name = self.metadata["sample"]["name"]
+        except KeyError:
+            name = None
+
+        if name:
+            desc = f"{name} {desc}"
+
+        return f"<{type(self).__name__} ({desc})>"
 
 
 #class AIMMCatalog(Node):
@@ -124,13 +180,3 @@ class MongoCatalog(Node):
 #            assert False
 #
 #
-#class XASClient(DataFrameClient):
-#    def __repr__(self):
-#        element = self.metadata["element"]["symbol"]
-#        edge = self.metadata["element"]["edge"]
-#        name = self.metadata["sample"]["name"]
-#        return f"<{type(self).__name__} ({name} {element}-{edge})>"
-#
-#    @property
-#    def uid(self):
-#        return self.metadata["uid"]

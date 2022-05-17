@@ -1,272 +1,216 @@
 import collections.abc
-import copy
-import io
 import json
-from dataclasses import dataclass
-from enum import Enum
+import os
+from pathlib import Path
 
-import h5py
 import pymongo
-from tiled.adapters.utils import IndexersMixin
-from tiled.query_registration import QueryTranslationRegistry, register
-from tiled.utils import UNCHANGED, DictView, ListView
+import pydantic
 
-from aimmdb.adapters.xas import XASAdapter
-from aimmdb.serialization import deserialize_parquet
+from tiled.adapters.utils import IndexersMixin, tree_repr
+from tiled.query_registration import QueryTranslationRegistry
+from tiled.structures.core import StructureFamily
+from tiled.structures.dataframe import serialize_arrow
+from tiled.utils import APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView, ListView
 
-
-class OperationEnum(str, Enum):
-    distinct = "distinct"
-    lookup = "lookup"
-    keys = "keys"
-
-
-# TODO distinct operation should be able to inject metadata
-def parse_path(path):
-    key_translation = {
-        "uid": "_id",
-        "element": "metadata.element.symbol",
-        "edge": "metadata.element.edge",
-        "sample": "metadata.sample._id",
-        "dataset": "metadata.dataset",
-    }
-    valid_keys = set(key_translation.keys())
-    keys = path[0::2]
-    values = path[1::2]
-
-    if not set(keys).issubset(valid_keys):
-        invalid_keys = set(keys) - valid_keys
-        raise KeyError(f"keys {invalid_keys} not in {valid_keys}")
-
-    select = {key_translation[k]: v for k, v in zip(keys, values)}
-    leftover_keys = valid_keys - set(keys)
-
-    # if we have more keys then values then get distinct values for the last key
-    if len(keys) == len(values) + 1:
-        operation = (
-            OperationEnum("distinct"),
-            {"select": select, "distinct": key_translation[keys[-1]]},
-        )
-    # if keys and values are matched then perform a lookup if uid was provided otherwise get remaining keys
-    elif len(keys) == len(values):
-        if "uid" in keys:
-            operation = (OperationEnum("lookup"), {"select": select})
-        else:
-            operation = (
-                OperationEnum("keys"),
-                {"keys": leftover_keys, "select": select},
-            )
-    else:
-        raise KeyError(f"{len(keys)=}, {len(values)=}")
-
-    return operation
+import aimmdb.uid
+from aimmdb.adapters.array import WritingArrayAdapter
+from aimmdb.adapters.dataframe import WritingDataFrameAdapter
+from aimmdb.queries import RawMongo, OperationEnum, parse_path
+from aimmdb.schemas import GenericDocument, XASMetadata
 
 
-# @register(name="raw_mongo")
-# @dataclass
-# class RawMongoQuery:
-#    """
-#    Run a MongoDB query against a given collection.
-#    """
-#
-#    query: str  # We cannot put a dict in a URL, so this a JSON str.
-#
-#    def __init__(self, query):
-#        if isinstance(query, collections.abc.Mapping):
-#            query = json.dumps(query)
-#        self.query = query
+_mime_structure_association = {
+    StructureFamily.array: "application/x-hdf5",
+    StructureFamily.dataframe: APACHE_ARROW_FILE_MIME_TYPE,
+}
+
+key_translation = {
+    "uid": "uid",
+    "element": "metadata.element.symbol",
+    "edge": "metadata.element.edge",
+}
 
 
-def _get_database(uri, username, password):
-    if not pymongo.uri_parser.parse_uri(uri)["database"]:
-        raise ValueError(
-            f"Invalid URI: {uri!r} " f"Did you forget to include a database?"
-        )
-    else:
-        client = pymongo.MongoClient(uri, username=username, password=password)
-        return client.get_database()
+class Document(GenericDocument[XASMetadata]):
+    @pydantic.validator("specs")
+    def check_specs(cls, v):
+        assert "XAS" in v
+        return v
 
 
-class AIMMTree(collections.abc.Mapping, IndexersMixin):
-
+class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
     structure_family = "node"
+    specs = ["AIMMCatalog"]
 
-    # Define classmethods for managing what queries this Tree knows.
     query_registry = QueryTranslationRegistry()
     register_query = query_registry.register
     register_query_lazy = query_registry.register_lazy
 
-    from aimmdb.graphql import GQLRouter
+    # TODO remove when writing routes are upstreamed to tiled
     from aimmdb.router_tiled import router
 
-    router.include_router(GQLRouter, prefix="/graphql")
     include_routers = [router]
 
-    specs = ["AIMMCatalog"]
+    def __init__(
+        self,
+        *,
+        metadata_db,
+        data_directory,
+        queries=None,
+        sorting=None,
+        metadata=None,
+        principal=None,
+        access_policy=None,
+        path=None,
+    ):
+        self.data_directory = Path(data_directory).resolve()
+        if not self.data_directory.exists():
+            raise ValueError(f"Directory {self.data_directory} does not exist.")
+        if not self.data_directory.is_dir():
+            raise ValueError(
+                f"The given directory path {self.data_directory} is not a directory."
+            )
+        if not os.access(self.data_directory, os.W_OK):
+            raise ValueError("Directory {self.directory} is not writeable.")
+
+        self.metadata_db = metadata_db
+        self.metadata_collection = metadata_db.get_collection("metadata")
+        self.samples_collection = metadata_db.get_collection("samples")
+
+        self.queries = queries or []
+        self.sorting = sorting or []
+        self.metadata = metadata or {}
+        self.principal = principal
+        self.access_policy = access_policy
+
+        self.path = list(path or [])
+        self.op = parse_path(self.path, key_translation)
+
+        super().__init__()
 
     @classmethod
     def from_uri(
         cls,
         uri,
-        username,
-        password,
+        data_directory,
         *,
         metadata=None,
         access_policy=None,
-        principal=None,
     ):
-
-        db = _get_database(uri, username, password)
-        required_collections = ["samples", "measurements"]
-        if not set(required_collections).issubset(set(db.list_collection_names())):
-            print("initializing mongodb")
-            # setup indexes here
-            db.create_collection("samples")
-            db.create_collection("measurements")
+        if not pymongo.uri_parser.parse_uri(uri)["database"]:
+            raise ValueError(
+                f"Invalid URI: {uri!r} " f"Did you forget to include a database?"
+            )
+        metadata_db = pymongo.MongoClient(uri).get_database()
 
         return cls(
-            db,
+            metadata_db=metadata_db,
+            data_directory=data_directory,
             metadata=metadata,
             access_policy=access_policy,
-            principal=principal,
         )
 
-    def __init__(
-        self,
-        db,
-        metadata=None,
-        access_policy=None,
-        principal=None,
-        queries=None,
-        path=None,
-    ):
-        self._db = db
+    @classmethod
+    def from_mongomock(cls, data_directory, *, metadata=None):
+        import mongomock
 
-        if metadata:
-            self._metadata = copy.deepcopy(metadata)
-        else:
-            self._metadata = {}
-            self._metadata["sample"] = {}
-            self._metadata["element"] = {}
-            self._metadata["_tiled"] = {}
+        mongo_client = mongomock.MongoClient()
+        metadata_db = mongo_client["test"]
 
-        self._access_policy = access_policy
-        self._principal = principal
-
-        self._queries = list(queries or [])
-
-        self._path = list(path or [])
-
-        self._op = parse_path(self.path)
-
-        self._metadata["_tiled"]["op"] = self._op[0].value
-
-        # if we have performed a lookup on samples inject the sample metadata
-        if "metadata.sample._id" in self._op[1]["select"]:
-            sample_id = self._op[1]["select"]["metadata.sample._id"]
-            sample = self.db.samples.find_one({"_id": sample_id})
-            if sample:
-                self._metadata["sample"].update(sample)
-
-        if "metadata.element.symbol" in self._op[1]["select"]:
-            symbol = self._op[1]["select"]["metadata.element.symbol"]
-            self._metadata["element"]["symbol"] = symbol
-
-        if "metadata.element.edge" in self._op[1]["select"]:
-            edge = self._op[1]["select"]["metadata.element.edge"]
-            self._metadata["element"]["edge"] = edge
-
-        super().__init__()
-
-    @property
-    def access_policy(self):
-        return self._access_policy
-
-    @access_policy.setter
-    def access_policy(self, value):
-        self._access_policy = value
-
-    @property
-    def db(self):
-        return self._db
-
-    @property
-    def principal(self):
-        return self._principal
-
-    @property
-    def queries(self):
-        return DictView(self._queries)
-
-    @property
-    def metadata(self):
-        "Metadata about this Tree."
-        # Ensure this is immutable (at the top level) to help the user avoid
-        # getting the wrong impression that editing this would update anything
-        # persistent.
-        return DictView(self._metadata)
-
-    @property
-    def path(self):
-        return ListView(self._path)
-
-    @property
-    def op(self):
-        return self._op
+        return cls(
+            metadata_db=metadata_db,
+            data_directory=data_directory,
+            metadata=metadata,
+        )
 
     def authenticated_as(self, principal):
-        if self._principal is not None:
+        if self.principal is not None:
             raise RuntimeError(f"Already authenticated as {self.principal}")
-        if self._access_policy is not None:
-            tree = self._access_policy.filter_results(self, principal)
+        if self.access_policy is not None:
+            tree = self.access_policy.filter_results(self, principal)
         else:
             tree = self.new_variation(principal=principal)
         return tree
 
     def new_variation(
         self,
-        principal=UNCHANGED,
-        queries=UNCHANGED,
         metadata=UNCHANGED,
+        queries=UNCHANGED,
+        sorting=UNCHANGED,
+        principal=UNCHANGED,
         path=UNCHANGED,
+        **kwargs,
     ):
-        if principal is UNCHANGED:
-            principal = self.principal
+        if metadata is UNCHANGED:
+            metadata = self.metadata
         if queries is UNCHANGED:
             queries = self.queries
-        if metadata is UNCHANGED:
-            # NOTE we want to pass underlying dict instead of DictView so that it can be modified in __init__
-            metadata = self._metadata
+        if sorting is UNCHANGED:
+            sorting = self.sorting
+        if principal is UNCHANGED:
+            principal = self.principal
         if path is UNCHANGED:
             path = self.path
-
         return type(self)(
-            db=self._db,
+            metadata_db=self.metadata_db,
+            data_directory=self.data_directory,
             metadata=metadata,
-            access_policy=self._access_policy,
-            principal=principal,
             queries=queries,
+            sorting=sorting,
+            access_policy=self.access_policy,
+            principal=principal,
             path=path,
+            **kwargs,
         )
 
     def search(self, query):
         """
-        Return a Tree with a subset of the mapping.
+        Return a AIMMCatalog with a subset of the mapping.
         """
         return self.query_registry(query, self)
 
-    def _build_node(self, doc):
-        structf = doc["structure_family"]
-        if structf == "dataframe":
-            df = deserialize_parquet(doc["data"]["blob"])
-            metadata = doc["metadata"]
-            metadata.update(uid=doc["_id"])
-            return XASAdapter.from_pandas(df, metadata=metadata, npartitions=1)
+    def sort(self, sorting):
+        return self.new_variation(sorting=sorting)
+
+    def post_metadata(self, metadata, structure_family, structure, specs):
+        if self.path != ["uid"]:
+            raise RuntimeError("AIMMCatalog only allows posting data to /uid")
+
+        uid = aimmdb.uid.uid()
+
+        # FIXME how to validate/enforce specs
+        validated_document = Document(
+            uid=uid,
+            structure_family=structure_family,
+            structure=structure,
+            metadata=metadata,
+            specs=specs,
+            mimetype=_mime_structure_association[structure_family],
+        )
+
+        # After validating the document must be encoded to bytes again to make it compatible with MongoDB
+        if validated_document.structure_family == StructureFamily.dataframe:
+            validated_document.structure.micro.meta = bytes(
+                serialize_arrow(validated_document.structure.micro.meta, {})
+            )
+
+        self.metadata_collection.insert_one(validated_document.dict())
+        return uid
+
+    def _build_node_from_doc(self, doc):
+        if doc["structure_family"] == StructureFamily.array:
+            return WritingArrayAdapter(
+                self.metadata_collection, self.data_directory, Document.parse_obj(doc)
+            )
+        elif doc["structure_family"] == StructureFamily.dataframe:
+            return WritingDataFrameAdapter(
+                self.metadata_collection, self.data_directory, Document.parse_obj(doc)
+            )
         else:
-            raise RuntimeError(f"unhandled structure family {structf}")
+            raise ValueError("Unsupported Structure Family value in the databse")
 
     def _build_mongo_query(self, *queries):
-        combined = self._queries + list(queries)
+        combined = self.queries + list(queries)
         if combined:
             return {"$and": combined}
         else:
@@ -274,17 +218,17 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
 
     def __getitem__(self, key):
         path = self.path + [key]
-        operation = parse_path(path)
+        operation = parse_path(path, key_translation)
 
         # if new path is a lookup, do it now
         if operation[0] == OperationEnum.lookup:
             select = operation[1]["select"]
-            if "_id" not in select:
-                raise RuntimeError(f"_id not in {select}")
+            if "uid" not in select:
+                raise RuntimeError(f"uid not in {select}")
 
             query = self._build_mongo_query(select)
 
-            docs = list(self.db.measurements.find(query))
+            docs = list(self.metadata_collection.find(query))
 
             if len(docs) == 0:
                 raise KeyError(f"{key} not found")
@@ -294,7 +238,7 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
 
             doc = docs[0]
 
-            return self._build_node(doc)
+            return self._build_node_from_doc(doc)
 
         else:
             return self.new_variation(path=path)
@@ -307,11 +251,11 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
             distinct = self.op[1]["distinct"]
             query = self._build_mongo_query(select)
             # NOTE _id is guarenteed unique
-            if distinct == "_id":
-                return self.db.measurements.count_documents(query)
+            if distinct == "uid":
+                return self.metadata_collection.count_documents(query)
             else:
                 # FIXME wasteful to do the full self.op just to get the length
-                return len(self.db.measurements.find(query).distinct(distinct))
+                return len(self.metadata_collection.find(query).distinct(distinct))
         elif self.op[0] == OperationEnum.lookup:
             raise RuntimeError("unreachable")
         else:
@@ -325,11 +269,11 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
             distinct = self.op[1]["distinct"]
             query = self._build_mongo_query(select)
             # NOTE _id is guarenteed unique
-            if distinct == "_id":
-                for doc in self.db.measurements.find(query, {"_id": 1}):
-                    yield doc["_id"]
+            if distinct == "uid":
+                for doc in self.metadata_collection.find(query, {"uid": 1}):
+                    yield doc["uid"]
             else:
-                for v in self.db.measurements.find(query).distinct(distinct):
+                for v in self.metadata_collection.find(query).distinct(distinct):
                     yield v
         elif self.op[0] == OperationEnum.lookup:
             raise RuntimeError("unreachable")
@@ -353,14 +297,16 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
             distinct = self.op[1]["distinct"]
             query = self._build_mongo_query(select)
             # NOTE _id is guarenteed unique
-            if distinct == "_id":
+            if distinct == "uid":
                 for doc in (
-                    self.db.measurements.find(query, {"_id": 1}).skip(skip).limit(limit)
+                    self.metadata_collection.find(query, {"uid": 1})
+                    .skip(skip)
+                    .limit(limit)
                 ):
-                    yield doc["_id"]
+                    yield doc["uid"]
             else:
                 # FIXME wasteful to recompute this here (compute on construction?)
-                for v in self.db.measurements.find(query).distinct(distinct)[
+                for v in self.metadata_collection.find(query).distinct(distinct)[
                     skip : skip + limit
                 ]:
                     yield v
@@ -386,15 +332,17 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
             distinct = self.op[1]["distinct"]
             query = self._build_mongo_query(select)
             # NOTE _id is guarenteed unique
-            if distinct == "_id":
+            if distinct == "uid":
                 for doc in (
-                    self.db.measurements.find(query, {"_id": 1}).skip(skip).limit(limit)
+                    self.metadata_collection.find(query, {"uid": 1})
+                    .skip(skip)
+                    .limit(limit)
                 ):
-                    k = doc["_id"]
+                    k = doc["uid"]
                     yield (k, self[k])
             else:
                 # FIXME wasteful to recompute this here (compute on construction?)
-                for v in self.db.measurements.find(query).distinct(distinct)[
+                for v in self.metadata_collection.find(query).distinct(distinct)[
                     skip : skip + limit
                 ]:
                     yield (v, self[v])
@@ -407,48 +355,10 @@ class AIMMTree(collections.abc.Mapping, IndexersMixin):
         assert direction == 1, "direction=-1 should be handled by the client"
         return self._items_slice(index, index + 1, 1)
 
-    def read(self, fields=None):
-        if fields is not None:
-            raise NotImplementedError
-        return self
+
+def run_raw_mongo_query(query, tree):
+    query = json.loads(query.query)
+    return tree.new_variation(queries=tree.queries + [query])
 
 
-# def run_raw_mongo_query(query, tree):
-#    query = json.loads(query.query)
-#    return tree.new_variation(queries=tree._queries + [query])
-#
-#
-# AIMMTree.register_query(RawMongoQuery, run_raw_mongo_query)
-
-
-def walk(node, pre=None):
-    pre = pre[:] if pre else []
-
-    if isinstance(node, AIMMTree):
-        for k, v in node.items():
-            yield from walk(v, pre + [k])
-        if node.metadata:
-            yield from walk(node.metadata, pre + ["metadata"])
-    elif isinstance(node, collections.abc.Mapping):
-        for k, v in node.items():
-            yield from walk(v, pre + [k])
-    elif isinstance(node, XASAdapter):
-        df = node.read()
-        yield from walk({k: df[k].to_numpy() for k in df}, pre + ["data"])
-        if node.metadata:
-            yield from walk(node.metadata, pre + ["metadata"])
-    else:
-        yield (node, pre)
-
-
-def serialize_hdf5(node, metadata):
-    buffer = io.BytesIO()
-    with h5py.File(buffer, mode="w") as file:
-        for (x, pre) in walk(node):
-            path = "/".join(pre)
-            if x is not None:
-                file[path] = x
-            else:
-                file[path] = h5py.Empty("f")
-
-    return buffer.getbuffer()
+AIMMCatalog.register_query(RawMongo, run_raw_mongo_query)
