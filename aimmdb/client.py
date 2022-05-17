@@ -97,6 +97,10 @@ class XASClient(DataFrameClient):
 
         return f"<{type(self).__name__} ({desc})>"
 
+    @property
+    def uid(self):
+        return self.metadata["_tiled"]["uid"]
+
 
 # class AIMMCatalog(Node):
 #    def __repr__(self):

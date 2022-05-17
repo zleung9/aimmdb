@@ -58,7 +58,10 @@ class WritingDataFrameAdapter:
 
     @property
     def metadata(self):
-        return self.doc.metadata
+        out = self.doc.metadata.dict()
+        _tiled = {"uid" : self.doc.uid}
+        out["_tiled"] = _tiled
+        return out
 
     @dataframe_raise_if_inactive
     def read(self, *args, **kwargs):
@@ -74,6 +77,7 @@ class WritingDataFrameAdapter:
     def macrostructure(self):
         return self.dataframe_adapter.macrostructure()
 
+    # TODO permissions
     def put_data(self, body):
         # Organize files into subdirectories with the first two
         # charcters of the uid to avoid one giant directory.
@@ -95,6 +99,7 @@ class WritingDataFrameAdapter:
         assert result.matched_count == 1
         assert result.modified_count == 1
 
+    # TODO permissions
     def delete(self):
         path = self.directory / self.doc.uid[:2] / self.doc.uid
         os.remove(path)

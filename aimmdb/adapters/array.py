@@ -48,7 +48,10 @@ class WritingArrayAdapter:
 
     @property
     def metadata(self):
-        return self.doc.metadata
+        out = self.doc.metadata.dict()
+        _tiled = {"uid" : self.doc.uid}
+        out["_tiled"] = _tiled
+        return out
 
     @array_raise_if_inactive
     def read(self, *args, **kwargs):
