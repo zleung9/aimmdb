@@ -9,7 +9,8 @@ from tiled.adapters.utils import IndexersMixin, tree_repr
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView, ListView
+from tiled.utils import (APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView,
+                         ListView)
 
 import aimmdb.uid
 from aimmdb.adapters.array import WritingArrayAdapter
@@ -23,6 +24,7 @@ _mime_structure_association = {
 }
 
 Document = GenericDocument[Dict]
+
 
 class MongoAdapter(collections.abc.Mapping, IndexersMixin):
     structure_family = "node"
@@ -181,7 +183,6 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
             )
         else:
             raise ValueError("Unsupported Structure Family value in the databse")
-
 
     def _build_mongo_query(self, *queries):
         combined = self.queries + list(queries)

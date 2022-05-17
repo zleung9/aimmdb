@@ -7,6 +7,7 @@ from tiled.adapters.dataframe import DataFrameAdapter
 from tiled.server.pydantic_dataframe import DataFrameStructure
 from tiled.structures.dataframe import deserialize_arrow
 
+
 def dataframe_raise_if_inactive(method):
     def inner(self, *args, **kwargs):
         if self.dataframe_adapter is None:
@@ -17,7 +18,7 @@ def dataframe_raise_if_inactive(method):
     return inner
 
 
-#FIXME write specs
+# FIXME write specs
 class WritingDataFrameAdapter:
     structure_family = "dataframe"
 
@@ -97,5 +98,5 @@ class WritingDataFrameAdapter:
     def delete(self):
         path = self.directory / self.doc.uid[:2] / self.doc.uid
         os.remove(path)
-        result = self.metadata_collection.delete_one({"uid" : self.doc.uid})
+        result = self.metadata_collection.delete_one({"uid": self.doc.uid})
         assert result.deleted_count == 1

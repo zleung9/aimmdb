@@ -3,21 +3,20 @@ import json
 import os
 from pathlib import Path
 
-import pymongo
 import pydantic
-
+import pymongo
 from tiled.adapters.utils import IndexersMixin, tree_repr
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView, ListView
+from tiled.utils import (APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView,
+                         ListView)
 
 import aimmdb.uid
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
-from aimmdb.queries import RawMongo, OperationEnum, parse_path
+from aimmdb.queries import OperationEnum, RawMongo, parse_path
 from aimmdb.schemas import GenericDocument, XASMetadata
-
 
 _mime_structure_association = {
     StructureFamily.array: "application/x-hdf5",

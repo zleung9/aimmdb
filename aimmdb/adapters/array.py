@@ -90,5 +90,5 @@ class WritingArrayAdapter:
     def delete(self):
         path = self.directory / self.doc.uid[:2] / f"{self.doc.uid}.hdf5"
         os.remove(path)
-        result = self.metadata_collection.delete_one({"uid" : self.doc.uid})
+        result = self.metadata_collection.delete_one({"uid": self.doc.uid})
         assert result.deleted_count == 1

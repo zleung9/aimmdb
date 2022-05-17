@@ -1,6 +1,5 @@
-from typing import List, Optional
-
 import operator
+from typing import List, Optional
 
 import msgpack
 from tiled.client.dataframe import DataFrameClient
@@ -10,11 +9,14 @@ from tiled.client.utils import handle_error
 import aimmdb
 from aimmdb.schemas import XASMetadata
 
+
 class MongoCatalog(Node):
     def __delitem__(self, key):
         path = (
             "/node/delete/"
-            + "".join(f"/{part}" for part in self.context.path_parts) #FIXME this should be a prefix
+            + "".join(
+                f"/{part}" for part in self.context.path_parts
+            )  # FIXME this should be a prefix
             + "".join(f"/{part}" for part in self._path)
             + "/"
             + key
@@ -38,11 +40,14 @@ class MongoCatalog(Node):
             timestamp=3,  # Decode msgpack Timestamp as datetime.datetime object.
         )
 
+
 class AIMMCatalog(Node):
     def __delitem__(self, key):
         path = (
             "/node/delete/"
-            + "".join(f"/{part}" for part in self.context.path_parts) #FIXME this should be a prefix
+            + "".join(
+                f"/{part}" for part in self.context.path_parts
+            )  # FIXME this should be a prefix
             + "".join(f"/{part}" for part in self._path)
             + "/"
             + key
@@ -73,6 +78,7 @@ class AIMMCatalog(Node):
         validated_metadata = XASMetadata.parse_obj(metadata)
         self.write_dataframe(df, validated_metadata.dict(), specs=specs)
 
+
 class XASClient(DataFrameClient):
     def __repr__(self):
         # this metadata are required
@@ -92,7 +98,7 @@ class XASClient(DataFrameClient):
         return f"<{type(self).__name__} ({desc})>"
 
 
-#class AIMMCatalog(Node):
+# class AIMMCatalog(Node):
 #    def __repr__(self):
 #        element = self.metadata["element"].get("symbol", "*")
 #        edge = self.metadata["element"].get("edge", "*")

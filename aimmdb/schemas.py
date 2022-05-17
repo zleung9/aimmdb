@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import TypeVar, Generic, Dict, List, Optional, Union
+from typing import Dict, Generic, List, Optional, TypeVar, Union
 
 import pydantic
 import pydantic.generics
@@ -17,7 +17,8 @@ structure_association = {
     StructureFamily.xarray_dataset: DatasetStructure,
 }
 
-MetadataT = TypeVar('MetadataT')
+MetadataT = TypeVar("MetadataT")
+
 
 class GenericDocument(pydantic.generics.GenericModel, Generic[MetadataT]):
     uid: Optional[str]
@@ -100,8 +101,8 @@ class XDIElement(pydantic.BaseModel):
 
 
 class MeasurementEnum(str, Enum):
-   xas = "xas"
-   rixs = "rixs"
+    xas = "xas"
+    rixs = "rixs"
 
 
 class XASMetadata(pydantic.BaseModel, extra=pydantic.Extra.allow):
