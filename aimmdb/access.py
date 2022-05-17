@@ -12,6 +12,10 @@ def require_write_permission(method):
             raise HTTPException(
                 status_code=403, detail="principal does not have write permission"
             )
+        else:
+            return method(self, *args, **kwargs)
+
+    return inner
 
 class AIMMAccessPolicy:
 
@@ -55,9 +59,3 @@ class AIMMAccessPolicy:
             return {READ, WRITE}
         else:
             return self.access_lists.get(id, None)
-
-    def filter_results(self, tree, principal):
-        if READ in self.permissions(principal):
-            return tree
-        else:
-            return MapAdapter({})

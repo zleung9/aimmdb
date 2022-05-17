@@ -122,14 +122,14 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             metadata=metadata,
         )
 
+    # TODO should generate a query to filter datasets
     def authenticated_as(self, principal):
-        if self.principal is not None:
-            raise RuntimeError(f"Already authenticated as {self.principal}")
-        if self.access_policy is not None:
-            tree = self.access_policy.filter_results(self, principal)
+        if self.principal is None:
+            return self.new_variation(principal=principal)
+        elif self.principal == principal:
+            return self
         else:
-            tree = self.new_variation(principal=principal)
-        return tree
+            raise RuntimeError(f"Already authenticated as {self.principal}")
 
     def new_variation(
         self,
