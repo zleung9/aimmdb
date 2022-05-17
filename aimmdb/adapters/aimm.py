@@ -199,11 +199,11 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
     def _build_node_from_doc(self, doc):
         if doc["structure_family"] == StructureFamily.array:
             return WritingArrayAdapter(
-                self.metadata_collection, self.data_directory, Document.parse_obj(doc)
+                self.metadata_collection, self.data_directory, Document.parse_obj(doc), self.access_policy.permissions(self.principal)
             )
         elif doc["structure_family"] == StructureFamily.dataframe:
             return WritingDataFrameAdapter(
-                self.metadata_collection, self.data_directory, Document.parse_obj(doc)
+                self.metadata_collection, self.data_directory, Document.parse_obj(doc), self.access_policy.permissions(self.principal)
             )
         else:
             raise ValueError("Unsupported Structure Family value in the databse")

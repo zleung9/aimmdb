@@ -1,12 +1,15 @@
 import os
 from sys import platform
 
+from fastapi import HTTPException
+
 import dask
 import pandas as pd
 from tiled.adapters.dataframe import DataFrameAdapter
 from tiled.server.pydantic_dataframe import DataFrameStructure
 from tiled.structures.dataframe import deserialize_arrow
 
+from aimmdb.access import require_write_permission
 
 def dataframe_raise_if_inactive(method):
     def inner(self, *args, **kwargs):
@@ -17,16 +20,16 @@ def dataframe_raise_if_inactive(method):
 
     return inner
 
-
 # FIXME write specs
 class WritingDataFrameAdapter:
     structure_family = "dataframe"
 
-    def __init__(self, metadata_collection, directory, doc):
+    def __init__(self, metadata_collection, directory, doc, permissions):
         self.metadata_collection = metadata_collection
         self.directory = directory
         self.doc = doc
         self.dataframe_adapter = None
+        self.permissions = permissions
 
         if self.doc.data_url is not None:
             path = self.doc.data_url.path
@@ -77,8 +80,9 @@ class WritingDataFrameAdapter:
     def macrostructure(self):
         return self.dataframe_adapter.macrostructure()
 
-    # TODO permissions
+    @require_write_permission
     def put_data(self, body):
+
         # Organize files into subdirectories with the first two
         # charcters of the uid to avoid one giant directory.
         path = self.directory / self.doc.uid[:2] / self.doc.uid
@@ -99,7 +103,7 @@ class WritingDataFrameAdapter:
         assert result.matched_count == 1
         assert result.modified_count == 1
 
-    # TODO permissions
+    @require_write_permission
     def delete(self):
         path = self.directory / self.doc.uid[:2] / self.doc.uid
         os.remove(path)

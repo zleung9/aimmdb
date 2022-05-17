@@ -10,8 +10,8 @@ trees:
       args:
         provider: toy
         access_lists:
-          joe: aimmdb.access:AIMMAccessPolicy.READWRITE
-          dan: aimmdb.access:AIMMAccessPolicy.READ
+          joe: "rw"
+          dan: "r"
 authentication:
   allow_anonymous_access: false
   providers:
