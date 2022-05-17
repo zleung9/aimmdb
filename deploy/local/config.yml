@@ -1,6 +1,7 @@
 trees:
   - path: /
-    tree: aimmdb.adapters.mongo:MongoAdapter.from_uri
+    tree: aimmdb.adapters.aimm:AIMMCatalog.from_uri
+    #    tree: aimmdb.adapters.mongo:MongoAdapter.from_uri
     args:
       uri: mongodb://root:${MONGO_PASSWORD}@localhost:27017/aimm?authSource=admin
       data_directory: ./data
