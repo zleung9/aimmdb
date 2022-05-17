@@ -4,7 +4,7 @@ import base64
 from typing import Dict, List
 
 import pydantic
-from fastapi import APIRouter, Request, Security
+from fastapi import APIRouter, Request, Security, HTTPException
 from tiled.server.core import json_or_msgpack
 from tiled.server.dependencies import entry
 from tiled.server.schemas import Structure
@@ -37,12 +37,18 @@ def post_metadata(
         meta = body.structure.micro["meta"]
         body.structure.micro["meta"] = deserialize_arrow(base64.b64decode(meta))
 
-    uid = entry.post_metadata(
-        metadata=body.metadata,
-        structure_family=body.structure_family,
-        structure=body.structure,
-        specs=body.specs,
-    )
+    try:
+        uid = entry.post_metadata(
+            metadata=body.metadata,
+            structure_family=body.structure_family,
+            structure=body.structure,
+            specs=body.specs,
+        )
+    except AttributeError:
+        raise HTTPException(
+            status_code=404, detail="entry does not support posting metadata"
+        )
+
     return json_or_msgpack(request, {"uid": uid})
 
 
@@ -52,7 +58,13 @@ async def put_array_full(
     entry=Security(entry, scopes=["write:data", "write:metadata"]),
 ):
     data = await request.body()
-    entry.put_data(data)
+    try:
+        entry.put_data(data)
+    except AttributeError:
+        raise HTTPException(
+            status_code=404, detail="entry does not support putting data"
+        )
+
     return json_or_msgpack(request, None)
 
 
@@ -62,7 +74,12 @@ async def put_dataframe_full(
     entry=Security(entry, scopes=["write:data", "write:metadata"]),
 ):
     data = await request.body()
-    entry.put_data(data)
+    try:
+        entry.put_data(data)
+    except AttributeError:
+        raise HTTPException(
+            status_code=404, detail="entry does not support putting data"
+        )
     return json_or_msgpack(request, None)
 
 
@@ -71,7 +88,12 @@ async def delete(
     request: Request,
     entry=Security(entry, scopes=["write:data", "write:metadata"]),
 ):
-    entry.delete()
+    try:
+        entry.delete()
+    except AttributeError:
+        raise HTTPException(
+            status_code=404, detail="entry does not support deletion"
+        )
     return json_or_msgpack(request, None)
 
 
