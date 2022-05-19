@@ -20,7 +20,7 @@ class PostMetadataRequest(pydantic.BaseModel):
 
 
 class PostMetadataResponse(pydantic.BaseModel):
-    uid: str
+    key: str
 
 
 router = APIRouter()
@@ -38,7 +38,7 @@ def post_metadata(
         body.structure.micro["meta"] = deserialize_arrow(base64.b64decode(meta))
 
     try:
-        uid = entry.post_metadata(
+        key = entry.post_metadata(
             metadata=body.metadata,
             structure_family=body.structure_family,
             structure=body.structure,
@@ -49,7 +49,7 @@ def post_metadata(
             status_code=404, detail="entry does not support posting metadata"
         )
 
-    return json_or_msgpack(request, {"uid": uid})
+    return json_or_msgpack(request, {"key": key})
 
 
 @router.put("/array/full/{path:path}")
@@ -91,9 +91,7 @@ async def delete(
     try:
         entry.delete()
     except AttributeError:
-        raise HTTPException(
-            status_code=404, detail="entry does not support deletion"
-        )
+        raise HTTPException(status_code=404, detail="entry does not support deletion")
     return json_or_msgpack(request, None)
 
 

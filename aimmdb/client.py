@@ -11,65 +11,11 @@ from aimmdb.schemas import XASMetadata
 
 
 class MongoCatalog(Node):
-    def __delitem__(self, key):
-        path = (
-            "/node/delete/"
-            + "".join(
-                f"/{part}" for part in self.context.path_parts
-            )  # FIXME this should be a prefix
-            + "".join(f"/{part}" for part in self._path)
-            + "/"
-            + key
-        )
-
-        # Submit CSRF token in both header and cookie.
-        # https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#double-submit-cookie
-        headers = {}
-        headers.setdefault("x-csrf", self.context._client.cookies["tiled_csrf"])
-        headers.setdefault("accept", "application/x-msgpack")
-        request = self.context._client.build_request(
-            "DELETE",
-            path,
-            content=None,
-            headers=headers,
-        )
-        response = self.context._client.send(request)
-        handle_error(response)
-        return msgpack.unpackb(
-            response.content,
-            timestamp=3,  # Decode msgpack Timestamp as datetime.datetime object.
-        )
+    pass
 
 
 class AIMMCatalog(Node):
-    def __delitem__(self, key):
-        path = (
-            "/node/delete/"
-            + "".join(
-                f"/{part}" for part in self.context.path_parts
-            )  # FIXME this should be a prefix
-            + "".join(f"/{part}" for part in self._path)
-            + "/"
-            + key
-        )
-
-        # Submit CSRF token in both header and cookie.
-        # https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#double-submit-cookie
-        headers = {}
-        headers.setdefault("x-csrf", self.context._client.cookies["tiled_csrf"])
-        headers.setdefault("accept", "application/x-msgpack")
-        request = self.context._client.build_request(
-            "DELETE",
-            path,
-            content=None,
-            headers=headers,
-        )
-        response = self.context._client.send(request)
-        handle_error(response)
-        return msgpack.unpackb(
-            response.content,
-            timestamp=3,  # Decode msgpack Timestamp as datetime.datetime object.
-        )
+    pass
 
     def write_xas(self, df, metadata, specs=None):
         specs = list(specs or [])
