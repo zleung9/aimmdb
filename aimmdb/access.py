@@ -6,6 +6,7 @@ from tiled.utils import SpecialUsers, import_object
 READ = object()  # sentinel
 WRITE = object()  # sentinel
 
+
 def require_write_permission(method):
     def inner(self, *args, **kwargs):
         if WRITE not in self.permissions:
@@ -17,15 +18,17 @@ def require_write_permission(method):
 
     return inner
 
-class AIMMAccessPolicy:
 
+class AIMMAccessPolicy:
     def __init__(self, access_lists, *, provider):
         self.access_lists = {}
         self.provider = provider
         for key, value in access_lists.items():
             value_set = set(value)
             if not value_set.issubset({"r", "w"}):
-                raise KeyError(f"AIMMAccessPolicy: value {value} must be one of (r, w, rw)")
+                raise KeyError(
+                    f"AIMMAccessPolicy: value {value} must be one of (r, w, rw)"
+                )
 
             access = []
             if "r" in value_set:
@@ -39,11 +42,12 @@ class AIMMAccessPolicy:
         # Get the id (i.e. username) of this Principal for the
         # associated authentication provider.
 
-        # FIXME how to handle principal is None
         if principal is None:
             return None
 
-        # FIXME handle SpecialUsers.public/SpecialUsers.admin
+        if isinstance(principal, SpecialUsers):
+            return principal
+
         for identity in principal.identities:
             if identity.provider == self.provider:
                 return identity.id
