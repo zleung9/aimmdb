@@ -9,8 +9,7 @@ from tiled.adapters.utils import IndexersMixin, tree_repr
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import (APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView,
-                         ListView)
+from tiled.utils import APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView, ListView
 
 import aimmdb.uid
 from aimmdb.adapters.array import WritingArrayAdapter
@@ -93,7 +92,7 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
         )
 
     @classmethod
-    def from_mongomock(cls, data_directory, *, metadata=None):
+    def from_mongomock(cls, data_directory, *, metadata=None, access_policy=None):
         import mongomock
 
         mongo_client = mongomock.MongoClient()
@@ -103,16 +102,16 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
             metadata_db=metadata_db,
             data_directory=data_directory,
             metadata=metadata,
+            access_policy=access_policy,
         )
 
     def authenticated_as(self, principal):
-        if self.principal is not None:
-            raise RuntimeError(f"Already authenticated as {self.principal}")
-        if self.access_policy is not None:
-            tree = self.access_policy.filter_results(self, principal)
+        if self.principal is None:
+            return self.new_variation(principal=principal)
+        elif self.principal == principal:
+            return self
         else:
-            tree = self.new_variation(principal=principal)
-        return tree
+            raise RuntimeError(f"Already authenticated as {self.principal}")
 
     def new_variation(
         self,
@@ -152,10 +151,10 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
 
     def post_metadata(self, metadata, structure_family, structure, specs):
 
-        uid = aimmdb.uid.uid()
+        key = aimmdb.uid.uid()
 
         validated_document = Document(
-            uid=uid,
+            uid=key,
             structure_family=structure_family,
             structure=structure,
             metadata=metadata,
@@ -170,16 +169,27 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
             )
 
         self.metadata_collection.insert_one(validated_document.dict())
-        return uid
+        return key
 
     def _build_node_from_doc(self, doc):
+        if self.access_policy is not None:
+            permissions = self.access_policy.permissions(self.principal)
+        else:
+            permissions = []
+
         if doc["structure_family"] == StructureFamily.array:
             return WritingArrayAdapter(
-                self.metadata_collection, self.data_directory, Document.parse_obj(doc)
+                self.metadata_collection,
+                self.data_directory,
+                Document.parse_obj(doc),
+                permissions,
             )
         elif doc["structure_family"] == StructureFamily.dataframe:
             return WritingDataFrameAdapter(
-                self.metadata_collection, self.data_directory, Document.parse_obj(doc)
+                self.metadata_collection,
+                self.data_directory,
+                Document.parse_obj(doc),
+                permissions,
             )
         else:
             raise ValueError("Unsupported Structure Family value in the databse")
@@ -192,10 +202,11 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
             return {}
 
     def __len__(self):
-        return self.metadata_collection.count_documents(
+        count = self.metadata_collection.count_documents(
             # self._build_mongo_query({"active": True})
             self._build_mongo_query({"data_url": {"$ne": None}})
         )
+        return count
 
     def __length_hint__(self):
         # https://www.python.org/dev/peps/pep-0424/
