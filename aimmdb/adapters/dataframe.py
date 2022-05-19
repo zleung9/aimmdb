@@ -11,6 +11,7 @@ from tiled.structures.dataframe import deserialize_arrow
 
 from aimmdb.access import require_write_permission
 
+
 def dataframe_raise_if_inactive(method):
     def inner(self, *args, **kwargs):
         if self.dataframe_adapter is None:
@@ -20,16 +21,17 @@ def dataframe_raise_if_inactive(method):
 
     return inner
 
+
 # FIXME write specs
 class WritingDataFrameAdapter:
     structure_family = "dataframe"
 
-    def __init__(self, metadata_collection, directory, doc, permissions):
+    def __init__(self, metadata_collection, directory, doc, permissions=None):
         self.metadata_collection = metadata_collection
         self.directory = directory
         self.doc = doc
         self.dataframe_adapter = None
-        self.permissions = permissions
+        self.permissions = list(permissions or [])
 
         if self.doc.data_url is not None:
             path = self.doc.data_url.path
@@ -106,6 +108,7 @@ class WritingDataFrameAdapter:
     @require_write_permission
     def delete(self):
         path = self.directory / self.doc.uid[:2] / self.doc.uid
+        # FIXME handle case where file does not exist
         os.remove(path)
         result = self.metadata_collection.delete_one({"uid": self.doc.uid})
         assert result.deleted_count == 1

@@ -7,6 +7,8 @@ import numpy as np
 from tiled.adapters.array import ArrayAdapter
 from tiled.server.pydantic_array import ArrayStructure
 
+from aimmdb.access import require_write_permission
+
 
 def array_raise_if_inactive(method):
     def inner(self, *args, **kwargs):
@@ -21,11 +23,13 @@ def array_raise_if_inactive(method):
 class WritingArrayAdapter:
     structure_family = "array"
 
-    def __init__(self, metadata_collection, directory, doc):
+    def __init__(self, metadata_collection, directory, doc, permissions=None):
         self.metadata_collection = metadata_collection
         self.directory = directory
         self.doc = doc
         self.array_adapter = None
+        self.permissions = list(permissions or [])
+
         if self.doc.data_url is not None:
             path = self.doc.data_url.path
             if platform == "win32" and path[0] == "/":
@@ -67,6 +71,7 @@ class WritingArrayAdapter:
     def macrostructure(self):
         return self.array_adapter.macrostructure()
 
+    @require_write_permission
     def put_data(self, body):
         # Organize files into subdirectories with the first two
         # charcters of the uid to avoid one giant directory.
@@ -90,6 +95,7 @@ class WritingArrayAdapter:
         assert result.matched_count == 1
         assert result.modified_count == 1
 
+    @require_write_permission
     def delete(self):
         path = self.directory / self.doc.uid[:2] / f"{self.doc.uid}.hdf5"
         os.remove(path)
