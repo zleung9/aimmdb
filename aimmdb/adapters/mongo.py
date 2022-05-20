@@ -16,6 +16,7 @@ from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
 from aimmdb.queries import RawMongo
 from aimmdb.schemas import GenericDocument
+from aimmdb.access import READ, WRITE, require_write_permission
 
 _mime_structure_association = {
     StructureFamily.array: "application/x-hdf5",
@@ -105,13 +106,32 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
             access_policy=access_policy,
         )
 
-    def authenticated_as(self, principal):
-        if self.principal is None:
-            return self.new_variation(principal=principal)
-        elif self.principal == principal:
-            return self
+    @property
+    def permissions(self):
+        """
+        Return the permissions of the current principal on this node
+        """
+        if self.access_policy is not None:
+            permissions = self.access_policy.permissions(self, self.principal)
         else:
+            # no access_policy => anyone can read/write
+            permissions = {READ, WRITE}
+
+        # we should never reach a node which principal does not have permission to read
+        if READ not in permissions:
+            raise RuntimeError("reached unreadable node")
+
+        return permissions
+
+    def authenticated_as(self, principal):
+        if self.principal is not None and self.principal != principal:
             raise RuntimeError(f"Already authenticated as {self.principal}")
+
+        if self.access_policy is not None:
+            tree = self.access_policy.filter_results(self, principal)
+        else:
+            tree = self.new_variation(principal=principal)
+        return tree
 
     def new_variation(
         self,
@@ -149,8 +169,8 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
     def sort(self, sorting):
         return self.new_variation(sorting=sorting)
 
+    @require_write_permission
     def post_metadata(self, metadata, structure_family, structure, specs):
-
         key = aimmdb.uid.uid()
 
         validated_document = Document(
@@ -172,24 +192,19 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
         return key
 
     def _build_node_from_doc(self, doc):
-        if self.access_policy is not None:
-            permissions = self.access_policy.permissions(self.principal)
-        else:
-            permissions = []
-
         if doc["structure_family"] == StructureFamily.array:
             return WritingArrayAdapter(
                 self.metadata_collection,
                 self.data_directory,
                 Document.parse_obj(doc),
-                permissions,
+                self.permissions,
             )
         elif doc["structure_family"] == StructureFamily.dataframe:
             return WritingDataFrameAdapter(
                 self.metadata_collection,
                 self.data_directory,
                 Document.parse_obj(doc),
-                permissions,
+                self.permissions,
             )
         else:
             raise ValueError("Unsupported Structure Family value in the databse")
