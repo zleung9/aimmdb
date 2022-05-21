@@ -30,7 +30,7 @@ class GenericDocument(pydantic.generics.GenericModel, Generic[MetadataT]):
     data_blob: Optional[bytes]
     data_url: Optional[pydantic.AnyUrl]
 
-    @pydantic.root_validator
+    @pydantic.root_validator(skip_on_failure=True)
     def validate_structure_matches_structure_family(cls, values):
         # actual_structure_type = cls.__annotations__["structure"]  # this is what was filled in for StructureT
         actual_structure = values.get("structure")
@@ -46,7 +46,7 @@ class GenericDocument(pydantic.generics.GenericModel, Generic[MetadataT]):
             )
         return values
 
-    @pydantic.root_validator
+    @pydantic.root_validator(skip_on_failure=True)
     def check_data_source(cls, values):
         # Making them optional and setting default values might help to meet these conditions
         # with the current data types without getting any conflicts
