@@ -109,10 +109,10 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
     @property
     def permissions(self):
         """
-        Return the permissions of the current principal on this node
+        Return the permissions of the current principal
         """
         if self.access_policy is not None:
-            permissions = self.access_policy.permissions(self, self.principal)
+            permissions = self.access_policy.permissions(self.principal)
         else:
             # no access_policy => anyone can read/write
             permissions = {READ, WRITE}
@@ -288,7 +288,7 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
 
     def _item_by_index(self, index, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
-        return self._items_slice(index, index + 1, 1)
+        return self._items_slice(index, index + 1, 1)[0]
 
 
 def run_raw_mongo_query(query, tree):

@@ -30,7 +30,12 @@ def require_write_permission(method):
     return inner
 
 
-class AIMMAccessPolicy:
+class SimpleAccessPolicy:
+    """
+    A mapping of user names to global permissions
+
+    >>> SimpleAccessPolicy({"alice": "rw", "bob": "r"}, provider="toy")
+    """
     def __init__(self, access_lists, *, provider):
         self.access_lists = {}
         self.provider = provider
@@ -55,7 +60,7 @@ class AIMMAccessPolicy:
                     f"Its identities are: {principal.identities}"
                 )
 
-    def permissions(self, tree, principal):
+    def permissions(self, principal):
         id = self.get_id(principal)
         if id is SpecialUsers.admin:
             return {READ, WRITE}
@@ -63,7 +68,7 @@ class AIMMAccessPolicy:
             return self.access_lists.get(id, set())
 
     def filter_results(self, tree, principal):
-        if READ in self.permissions(tree, principal):
+        if READ in self.permissions(principal):
             return tree.new_variation(principal=principal)
         else:
             return MapAdapter({})

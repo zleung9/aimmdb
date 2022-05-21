@@ -6,7 +6,7 @@ from tiled.client import from_tree
 import aimmdb
 from aimmdb.adapters.mongo import MongoAdapter
 from aimmdb.queries import RawMongo
-from aimmdb.access import AIMMAccessPolicy
+from aimmdb.access import SimpleAccessPolicy
 from tiled.authenticators import DictionaryAuthenticator
 
 from .utils import fail_with_status_code
@@ -56,7 +56,7 @@ def test_access(enter_password, tmpdir):
     # alice can read and write
     # bob can read
     # joe is not listed and therefore cannot see anything
-    access_policy = AIMMAccessPolicy(
+    access_policy = SimpleAccessPolicy(
         access_lists={"alice": "rw", "bob": "r"}, provider="toy"
     )
 
