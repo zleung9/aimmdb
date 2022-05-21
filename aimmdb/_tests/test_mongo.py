@@ -1,7 +1,3 @@
-import time
-import getpass
-import contextlib
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -12,34 +8,8 @@ from aimmdb.adapters.mongo import MongoAdapter
 from aimmdb.queries import RawMongo
 from aimmdb.access import AIMMAccessPolicy
 from tiled.authenticators import DictionaryAuthenticator
-from tiled.client.utils import ClientError
 
-
-@contextlib.contextmanager
-def fail_with_status_code(status_code):
-    with pytest.raises(ClientError) as info:
-        yield
-    assert info.value.response.status_code == status_code
-
-
-@pytest.fixture
-def enter_password(monkeypatch):
-    """
-    Return a context manager that overrides getpass, used like:
-
-    >>> with enter_password(...):
-    ...     # Run code that calls getpass.getpass().
-    """
-
-    @contextlib.contextmanager
-    def f(password):
-        original = getpass.getpass
-        monkeypatch.setattr("getpass.getpass", lambda: password)
-        yield
-        monkeypatch.setattr("getpass.getpass", original)
-
-    return f
-
+from .utils import fail_with_status_code
 
 def test_basic(tmpdir):
     data_directory = tmpdir / "data"
