@@ -185,15 +185,22 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
     def sort(self, sorting):
         return self.new_variation(sorting=sorting)
 
-    @require_write_permission
-    def post_metadata(self, metadata, structure_family, structure, specs):
+    def _get_document_model(self, specs):
         spec_to_document_model_keys = set(self.spec_to_document_model.keys()).intersection(specs)
         if len(spec_to_document_model_keys) > 1:
-            raise HTTPException(status_code=400, detail=f"specs {specs} matched more than one document model")
+            raise KeyError(f"specs {specs} matched more than one document model")
         k = spec_to_document_model_keys.pop() if spec_to_document_model_keys else None
         document_model = self.spec_to_document_model[k]
+        return document_model
 
+    @require_write_permission
+    def post_metadata(self, metadata, structure_family, structure, specs):
         key = aimmdb.uid.uid()
+
+        try:
+            document_model = self._get_document_model(specs)
+        except KeyError as err:
+            raise HTTPException(status_code=400, detail=f"{err}")
 
         try:
             validated_document = document_model(
@@ -217,18 +224,21 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
         return key
 
     def _build_node_from_doc(self, doc):
+        # NOTE we don't use self._get_document_model to do extra validation based on specs
+        document_model = Document
+
         if doc["structure_family"] == StructureFamily.array:
             return WritingArrayAdapter(
                 self.metadata_collection,
                 self.data_directory,
-                Document.parse_obj(doc),
+                document_model.parse_obj(doc),
                 self.permissions,
             )
         elif doc["structure_family"] == StructureFamily.dataframe:
             return WritingDataFrameAdapter(
                 self.metadata_collection,
                 self.data_directory,
-                Document.parse_obj(doc),
+                document_model.parse_obj(doc),
                 self.permissions,
             )
         else:
