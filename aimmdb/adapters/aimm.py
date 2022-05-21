@@ -2,21 +2,25 @@ import collections.abc
 import json
 import os
 from pathlib import Path
+from collections import defaultdict
 
 import pydantic
 import pymongo
+
+from fastapi import HTTPException
+
 from tiled.adapters.utils import IndexersMixin, tree_repr
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import (APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView,
-                         ListView)
+from tiled.utils import APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView, ListView, import_object
 
 import aimmdb.uid
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
 from aimmdb.queries import OperationEnum, RawMongo, parse_path
-from aimmdb.schemas import GenericDocument, XASMetadata
+from aimmdb.schemas import DocumentWithDataset, Document
+from aimmdb.access import READ, WRITE, require_write_permission
 
 _mime_structure_association = {
     StructureFamily.array: "application/x-hdf5",
@@ -27,14 +31,8 @@ key_translation = {
     "uid": "uid",
     "element": "metadata.element.symbol",
     "edge": "metadata.element.edge",
+    "dataset": "metadata.dataset",
 }
-
-
-class Document(GenericDocument[XASMetadata]):
-    @pydantic.validator("specs")
-    def check_specs(cls, v):
-        assert "XAS" in v
-        return v
 
 
 class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
@@ -61,6 +59,7 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         principal=None,
         access_policy=None,
         path=None,
+        spec_to_document_model=None,
     ):
         self.data_directory = Path(data_directory).resolve()
         if not self.data_directory.exists():
@@ -85,6 +84,13 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         self.path = list(path or [])
         self.op = parse_path(self.path, key_translation)
 
+        # use DocumentWithDataset to require metadata.dataset to be present
+        if spec_to_document_model is None:
+            self.spec_to_document_model = defaultdict(lambda : DocumentWithDataset)
+        else:
+            default_document_model = spec_to_document_model.pop("default", DocumentWithDataset)
+            self.spec_to_document_model = defaultdict(lambda: default_document_model, {k : import_object(v) for k,v in spec_to_document_model.items()})
+
         super().__init__()
 
     @classmethod
@@ -95,6 +101,7 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         *,
         metadata=None,
         access_policy=None,
+        spec_to_document_model=None,
     ):
         if not pymongo.uri_parser.parse_uri(uri)["database"]:
             raise ValueError(
@@ -107,10 +114,11 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             data_directory=data_directory,
             metadata=metadata,
             access_policy=access_policy,
+            spec_to_document_model=spec_to_document_model,
         )
 
     @classmethod
-    def from_mongomock(cls, data_directory, *, metadata=None):
+    def from_mongomock(cls, data_directory, *, metadata=None, access_policy=None):
         import mongomock
 
         mongo_client = mongomock.MongoClient()
@@ -120,16 +128,37 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             metadata_db=metadata_db,
             data_directory=data_directory,
             metadata=metadata,
+            access_policy=access_policy,
         )
 
-    # TODO should generate a query to filter datasets
-    def authenticated_as(self, principal):
-        if self.principal is None:
-            return self.new_variation(principal=principal)
-        elif self.principal == principal:
-            return self
+    @property
+    def permissions(self):
+        """
+        Return the permissions of the current principal
+        """
+        # FIXME in more sophisticated cases permissions may DEPEND on metadata
+        # For example only being able to write to a particular dataset
+        if self.access_policy is not None:
+            permissions = self.access_policy.permissions(self.principal)
         else:
+            # no access_policy => anyone can read/write
+            permissions = {READ, WRITE}
+
+        # we should never reach a node which principal does not have permission to read
+        if READ not in permissions:
+            raise RuntimeError("reached unreadable node")
+
+        return permissions
+
+    def authenticated_as(self, principal):
+        if self.principal is not None and self.principal != principal:
             raise RuntimeError(f"Already authenticated as {self.principal}")
+
+        if self.access_policy is not None:
+            tree = self.access_policy.filter_results(self, principal)
+        else:
+            tree = self.new_variation(principal=principal)
+        return tree
 
     def new_variation(
         self,
@@ -159,6 +188,7 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             access_policy=self.access_policy,
             principal=principal,
             path=path,
+            spec_to_document_model=self.spec_to_document_model,
             **kwargs,
         )
 
@@ -171,21 +201,37 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
     def sort(self, sorting):
         return self.new_variation(sorting=sorting)
 
+    def _get_document_model(self, specs):
+        spec_to_document_model_keys = set(self.spec_to_document_model.keys()).intersection(specs)
+        if len(spec_to_document_model_keys) > 1:
+            raise KeyError(f"specs {specs} matched more than one document model")
+        k = spec_to_document_model_keys.pop() if spec_to_document_model_keys else None
+        document_model = self.spec_to_document_model[k]
+        return document_model
+
+    @require_write_permission
     def post_metadata(self, metadata, structure_family, structure, specs):
         if self.path != ["uid"]:
-            raise RuntimeError("AIMMCatalog only allows posting data to /uid")
+            raise HTTPException(status_code=400, detail="AIMMCatalog only allows posting data to /uid")
 
-        uid = aimmdb.uid.uid()
+        key = aimmdb.uid.uid()
 
-        # FIXME how to validate/enforce specs
-        validated_document = Document(
-            uid=uid,
-            structure_family=structure_family,
-            structure=structure,
-            metadata=metadata,
-            specs=specs,
-            mimetype=_mime_structure_association[structure_family],
-        )
+        try:
+            document_model = self._get_document_model(specs)
+        except KeyError as err:
+            raise HTTPException(status_code=400, detail=f"{err}")
+
+        try:
+            validated_document = document_model(
+                uid=key,
+                structure_family=structure_family,
+                structure=structure,
+                metadata=metadata,
+                specs=specs,
+                mimetype=_mime_structure_association[structure_family],
+            )
+        except pydantic.ValidationError as err:
+            raise HTTPException(status_code=400, detail=f"{err}")
 
         # After validating the document must be encoded to bytes again to make it compatible with MongoDB
         if validated_document.structure_family == StructureFamily.dataframe:
@@ -194,16 +240,25 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             )
 
         self.metadata_collection.insert_one(validated_document.dict())
-        return uid
+        return key
 
     def _build_node_from_doc(self, doc):
+        # NOTE we don't use self._get_document_model to do extra validation based on specs
+        document_model = Document
+
         if doc["structure_family"] == StructureFamily.array:
             return WritingArrayAdapter(
-                self.metadata_collection, self.data_directory, Document.parse_obj(doc), self.access_policy.permissions(self.principal)
+                self.metadata_collection,
+                self.data_directory,
+                document_model.parse_obj(doc),
+                self.permissions,
             )
         elif doc["structure_family"] == StructureFamily.dataframe:
             return WritingDataFrameAdapter(
-                self.metadata_collection, self.data_directory, Document.parse_obj(doc), self.access_policy.permissions(self.principal)
+                self.metadata_collection,
+                self.data_directory,
+                document_model.parse_obj(doc),
+                self.permissions,
             )
         else:
             raise ValueError("Unsupported Structure Family value in the databse")
@@ -352,7 +407,7 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
 
     def _item_by_index(self, index, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
-        return self._items_slice(index, index + 1, 1)
+        return self._items_slice(index, index + 1, 1)[0]
 
 
 def run_raw_mongo_query(query, tree):

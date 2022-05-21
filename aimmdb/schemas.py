@@ -126,6 +126,11 @@ class XASDocument(GenericDocument[XASMetadata]):
             raise ValueError(f"{structure_family=}")
         return structure_family
 
+class MetadataWithDataset(pydantic.BaseModel, extra=pydantic.Extra.allow):
+    dataset: str
+
+DocumentWithDataset = GenericDocument[MetadataWithDataset]
+
 # from enum import Enum
 # from typing import List, Optional, Union
 #
