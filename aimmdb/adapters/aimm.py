@@ -60,6 +60,7 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         access_policy=None,
         path=None,
         spec_to_document_model=None,
+        dataset_to_specs=None,
     ):
         self.data_directory = Path(data_directory).resolve()
         if not self.data_directory.exists():
@@ -91,6 +92,8 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             default_document_model = spec_to_document_model.pop("default", DocumentWithDataset)
             self.spec_to_document_model = defaultdict(lambda: default_document_model, {k : import_object(v) for k,v in spec_to_document_model.items()})
 
+        self.dataset_to_specs = dataset_to_specs or {}
+
         super().__init__()
 
     @classmethod
@@ -102,6 +105,7 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         metadata=None,
         access_policy=None,
         spec_to_document_model=None,
+        dataset_to_specs=None,
     ):
         if not pymongo.uri_parser.parse_uri(uri)["database"]:
             raise ValueError(
@@ -115,10 +119,11 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             metadata=metadata,
             access_policy=access_policy,
             spec_to_document_model=spec_to_document_model,
+            dataset_to_specs=dataset_to_specs
         )
 
     @classmethod
-    def from_mongomock(cls, data_directory, *, metadata=None, access_policy=None):
+    def from_mongomock(cls, data_directory, *, metadata=None, access_policy=None, spec_to_document_model=None, dataset_to_specs=None):
         import mongomock
 
         mongo_client = mongomock.MongoClient()
@@ -129,6 +134,8 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             data_directory=data_directory,
             metadata=metadata,
             access_policy=access_policy,
+            spec_to_document_model=spec_to_document_model,
+            dataset_to_specs=dataset_to_specs,
         )
 
     @property
@@ -189,6 +196,7 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             principal=principal,
             path=path,
             spec_to_document_model=self.spec_to_document_model,
+            dataset_to_specs=self.dataset_to_specs,
             **kwargs,
         )
 
@@ -202,6 +210,7 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         return self.new_variation(sorting=sorting)
 
     def _get_document_model(self, specs):
+        # FIXME think more about how to handle multiple specs
         spec_to_document_model_keys = set(self.spec_to_document_model.keys()).intersection(specs)
         if len(spec_to_document_model_keys) > 1:
             raise KeyError(f"specs {specs} matched more than one document model")
@@ -232,6 +241,17 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             )
         except pydantic.ValidationError as err:
             raise HTTPException(status_code=400, detail=f"{err}")
+
+        # at this point according to the server the metadata matches the stated specs
+        # now check if we will accept these specs into the specified dataset
+        dataset = validated_document.metadata.dataset
+        allowed_specs = self.dataset_to_specs.get(dataset, None)
+
+        # FIXME think more about how to handle multiple specs
+        # if this dataset has a set of allowed specs then specs must be a non-empty subset
+        if allowed_specs is not None:
+            if not specs or not set(specs).issubset(allowed_specs):
+                raise HTTPException(status_code=400, detail=f"specs ({specs}) are not a non-empty subset of allowed specs ({allowed_specs}) for dataset {dataset}")
 
         # After validating the document must be encoded to bytes again to make it compatible with MongoDB
         if validated_document.structure_family == StructureFamily.dataframe:
