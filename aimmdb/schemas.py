@@ -110,8 +110,21 @@ class XASMetadata(pydantic.BaseModel, extra=pydantic.Extra.allow):
     measurement_type: MeasurementEnum = "xas"
     dataset: str
     sample_id: Optional[str]
-    tags: Optional[List[str]]
 
+Document = GenericDocument[Dict]
+
+class XASDocument(GenericDocument[XASMetadata]):
+    @pydantic.validator("specs")
+    def check_specs(cls, specs):
+        if "XAS" not in specs:
+            raise ValueError(f"{specs=}")
+        return specs
+
+    @pydantic.validator("structure_family")
+    def check_structure_family(cls, structure_family):
+        if structure_family != StructureFamily.dataframe:
+            raise ValueError(f"{structure_family=}")
+        return structure_family
 
 # from enum import Enum
 # from typing import List, Optional, Union
