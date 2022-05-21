@@ -2,29 +2,33 @@ import collections.abc
 import json
 import os
 from pathlib import Path
-from typing import Dict
+from collections import defaultdict
 
 import pymongo
+
+import pydantic
+from pydantic import ValidationError
+
+import fastapi
+from fastapi import HTTPException
+
 from tiled.adapters.utils import IndexersMixin, tree_repr
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView, ListView
+from tiled.utils import APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView, ListView, import_object
 
 import aimmdb.uid
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
 from aimmdb.queries import RawMongo
-from aimmdb.schemas import GenericDocument
+from aimmdb.schemas import Document
 from aimmdb.access import READ, WRITE, require_write_permission
 
 _mime_structure_association = {
     StructureFamily.array: "application/x-hdf5",
     StructureFamily.dataframe: APACHE_ARROW_FILE_MIME_TYPE,
 }
-
-Document = GenericDocument[Dict]
-
 
 class MongoAdapter(collections.abc.Mapping, IndexersMixin):
     structure_family = "node"
@@ -49,6 +53,7 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
         metadata=None,
         principal=None,
         access_policy=None,
+        spec_to_document_model=None,
     ):
         self.data_directory = Path(data_directory).resolve()
         if not self.data_directory.exists():
@@ -68,6 +73,13 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
         self.metadata = metadata or {}
         self.principal = principal
         self.access_policy = access_policy
+
+        if spec_to_document_model is None:
+            self.spec_to_document_model = defaultdict(lambda : Document)
+        else:
+            default_document_model = spec_to_document_model.pop("default", Document)
+            self.spec_to_document_model = defaultdict(lambda: default_document_model, {k : import_object(v) for k,v in spec_to_document_model.items()})
+
         super().__init__()
 
     @classmethod
@@ -78,6 +90,7 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
         *,
         metadata=None,
         access_policy=None,
+        spec_to_document_model=None,
     ):
         if not pymongo.uri_parser.parse_uri(uri)["database"]:
             raise ValueError(
@@ -90,10 +103,11 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
             data_directory=data_directory,
             metadata=metadata,
             access_policy=access_policy,
+            spec_to_document_model=spec_to_document_model,
         )
 
     @classmethod
-    def from_mongomock(cls, data_directory, *, metadata=None, access_policy=None):
+    def from_mongomock(cls, data_directory, *, metadata=None, access_policy=None, spec_to_document_model=None):
         import mongomock
 
         mongo_client = mongomock.MongoClient()
@@ -104,6 +118,7 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
             data_directory=data_directory,
             metadata=metadata,
             access_policy=access_policy,
+            spec_to_document_model=spec_to_document_model,
         )
 
     @property
@@ -157,6 +172,7 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
             sorting=sorting,
             access_policy=self.access_policy,
             principal=principal,
+            spec_to_document_model=self.spec_to_document_model,
             **kwargs,
         )
 
@@ -171,16 +187,25 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
 
     @require_write_permission
     def post_metadata(self, metadata, structure_family, structure, specs):
+        spec_to_document_model_keys = set(self.spec_to_document_model.keys()).intersection(specs)
+        if len(spec_to_document_model_keys) > 1:
+            raise HTTPException(status_code=400, detail=f"specs {specs} matched more than one document model")
+        k = spec_to_document_model_keys.pop() if spec_to_document_model_keys else None
+        document_model = self.spec_to_document_model[k]
+
         key = aimmdb.uid.uid()
 
-        validated_document = Document(
-            uid=key,
-            structure_family=structure_family,
-            structure=structure,
-            metadata=metadata,
-            specs=specs,
-            mimetype=_mime_structure_association[structure_family],
-        )
+        try:
+            validated_document = document_model(
+                uid=key,
+                structure_family=structure_family,
+                structure=structure,
+                metadata=metadata,
+                specs=specs,
+                mimetype=_mime_structure_association[structure_family],
+            )
+        except pydantic.ValidationError as err:
+            raise HTTPException(status_code=400, detail=f"{err}")
 
         # After validating the document must be encoded to bytes again to make it compatible with MongoDB
         if validated_document.structure_family == StructureFamily.dataframe:
