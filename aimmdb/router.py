@@ -1,95 +1,49 @@
-# import msgpack
-# from fastapi import APIRouter, Depends, Header, HTTPException, Request, Security
-# from tiled.server.authentication import get_current_principal
-# from tiled.server.dependencies import get_root_tree
-#
-# from .models import SampleData, XASData, XASDataDenormalized
-# from .uid import uid
-#
-#
-# def application_msgpack(content_type: str = Header(...)):
-#    """Require request MIME-type to be application/msgpack"""
-#
-#    if content_type != "application/msgpack":
-#        raise HTTPException(
-#            status_code=415,
-#            detail=f"Unsupported media type: {content_type}."
-#            " It must be application/msgpack",
-#        )
-#
-#
-# def has_write_permission(
-#    principal=Security(get_current_principal, scopes=["write:data", "write:metadata"]),
-#    root=Depends(get_root_tree),
-# ):
-#    if not root.access_policy.has_write_permission(principal):
-#        raise HTTPException(
-#            status_code=403, detail="principal does not have write permission"
-#        )
-#
-#
-# router = APIRouter()
-#
-#
-# @router.post("/samples", dependencies=[Depends(has_write_permission)])
-# def post_sample(
-#    request: Request,
-#    sample: SampleData,
-#    root=Depends(get_root_tree),
-# ):
-#    sample.uid = uid()
-#    r = root.db.samples.insert_one(sample.dict(by_alias=True))
-#    return {"uid": str(r.inserted_id)}
-#
-#
-# @router.delete("/samples/{uid}", dependencies=[Depends(has_write_permission)])
-# def delete_sample(
-#    uid: str,
-#    root=Depends(get_root_tree),
-# ):
-#    r = root.db.samples.delete_one({"_id": uid})
-#    if r.deleted_count != 1:
-#        raise HTTPException(status_code=404, detail=f"sample uid {uid} not found")
-#
-#    r = root.db.measurements.delete_many({"metadata.sample._id": uid})
-#    return None
-#
-#
-# @router.post(
-#    "/xas", dependencies=[Depends(has_write_permission), Depends(application_msgpack)]
-# )
-# async def post_xas(
-#    request: Request,
-#    root=Depends(get_root_tree),
-# ):
-#    body = await request.body()
-#    xas = XASData.parse_obj(msgpack.unpackb(body))
-#
-#    # denormalize sample on insertion
-#    sample = SampleData.parse_obj(
-#        root.db.samples.find_one({"_id": xas.metadata.sample_id})
-#    )
-#
-#    xas_dict = xas.dict()
-#    xas_dict["metadata"].pop("sample_id")
-#
-#    if "sample" in xas_dict["metadata"]:
-#        xas_dict["metadata"]["sample"].update(sample.dict(by_alias=True))
-#    else:
-#        xas_dict["metadata"]["sample"] = sample.dict(by_alias=True)
-#
-#    xas_dict["_id"] = uid()
-#    xas_denormalized = XASDataDenormalized.parse_obj(xas_dict)
-#
-#    r = root.db.measurements.insert_one(xas_denormalized.dict(by_alias=True))
-#    return {"uid": str(r.inserted_id)}
-#
-#
-# @router.delete("/xas/{uid}", dependencies=[Depends(has_write_permission)])
-# def delete_sample(
-#    uid: str,
-#    root=Depends(get_root_tree),
-# ):
-#    r = root.db.measurements.delete_one({"_id": uid})
-#    if r.deleted_count != 1:
-#        raise HTTPException(status_code=404, detail=f"sample uid {uid} not found")
+from typing import Dict
+
+import pydantic
+
+from fastapi import APIRouter, Request, Security, HTTPException, Depends
+
+from tiled.server.core import json_or_msgpack
+from tiled.server.dependencies import get_root_tree, get_current_principal
+
+from aimmdb.schemas import SampleData
+
+class PostSampleResponse(pydantic.BaseModel):
+    uid: str
+
+router = APIRouter()
+
+@router.post("/sample", response_model=PostSampleResponse)
+def post_sample(
+        request: Request,
+        sample: SampleData,
+        root=Security(get_root_tree, scopes=["write:data", "write:metadata"]),
+        principal: str = Depends(get_current_principal),
+):
+    entry = root.authenticated_as(principal)
+    try:
+        uid = entry.post_sample(sample)
+    except AttributeError:
+        raise HTTPException(
+            status_code=404, detail="tree does not support posting sample metadata"
+        )
+
+    return json_or_msgpack(request, {"uid": uid})
+
+@router.delete("/sample/{uid}")
+def delete_sample(
+        request: Request,
+        uid: str,
+        root=Security(get_root_tree, scopes=["write:data", "write:metadata"]),
+        principal: str = Depends(get_current_principal),
+):
+    entry = root.authenticated_as(principal)
+    try:
+        entry.delete_sample(uid)
+    except AttributeError:
+        raise HTTPException(
+            status_code=404, detail="tree does not support deleting sample metadata"
+        )
+
+    return json_or_msgpack(request, None)

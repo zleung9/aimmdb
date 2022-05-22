@@ -44,9 +44,10 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
     register_query_lazy = query_registry.register_lazy
 
     # TODO remove when writing routes are upstreamed to tiled
-    from aimmdb.router_tiled import router
+    from aimmdb.router_tiled import router as router_tiled
+    from aimmdb.router import router
 
-    include_routers = [router]
+    include_routers = [router_tiled, router]
 
     def __init__(
         self,
@@ -74,7 +75,7 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
 
         self.metadata_db = metadata_db
         self.metadata_collection = metadata_db.get_collection("metadata")
-        self.samples_collection = metadata_db.get_collection("samples")
+        self.sample_collection = metadata_db.get_collection("samples")
 
         self.queries = queries or []
         self.sorting = sorting or []
@@ -219,6 +220,18 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         return document_model
 
     @require_write_permission
+    def post_sample(self, sample):
+        sample.uid = aimmdb.uid.uid()
+        result = self.sample_collection.insert_one(sample.dict())
+        assert result.acknowledged == True
+        return sample.uid
+
+    @require_write_permission
+    def delete_sample(self, uid):
+        result = self.sample_collection.delete_one({"uid" : uid})
+        assert result.deleted_count == 1
+
+    @require_write_permission
     def post_metadata(self, metadata, structure_family, structure, specs):
         if self.path != ["uid"]:
             raise HTTPException(status_code=400, detail="AIMMCatalog only allows posting data to /uid")
@@ -258,6 +271,19 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             validated_document.structure.micro.meta = bytes(
                 serialize_arrow(validated_document.structure.micro.meta, {})
             )
+
+        # FIXME what if metadata is a dict?
+        try:
+            sample_id = validated_document.metadata.sample_id
+        except AttributeError:
+            sample_id = None
+
+        if sample_id is not None:
+            sample = self.sample_collection.find_one({"uid" : sample_id}, {"_id" : False})
+            if sample is None:
+                raise HTTPException(status_code=400, detail=f"sample_id {sample_id} not found")
+            else:
+                validated_document.metadata.sample = sample
 
         self.metadata_collection.insert_one(validated_document.dict())
         return key

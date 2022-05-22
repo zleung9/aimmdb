@@ -7,7 +7,7 @@ from tiled.client.node import Node
 from tiled.client.utils import handle_error
 
 import aimmdb
-from aimmdb.schemas import XASMetadata
+from aimmdb.schemas import XASMetadata, SampleData
 
 
 class MongoCatalog(Node):
@@ -23,6 +23,15 @@ class AIMMCatalog(Node):
 
         validated_metadata = XASMetadata.parse_obj(metadata)
         self.write_dataframe(df, validated_metadata.dict(), specs=specs)
+
+    def write_sample(self, metadata):
+        sample = SampleData.parse_obj(metadata)
+        document = self.context.post_json("/sample", sample.dict())
+        uid = document["uid"]
+        return uid
+
+    def delete_sample(self, uid):
+        self.context.delete_content(f"/sample/{uid}", None)
 
 
 class XASClient(DataFrameClient):

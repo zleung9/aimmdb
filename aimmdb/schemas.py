@@ -126,55 +126,11 @@ class XASDocument(GenericDocument[XASMetadata]):
             raise ValueError(f"{structure_family=}")
         return structure_family
 
+class SampleData(pydantic.BaseModel, extra=pydantic.Extra.allow):
+    uid: Optional[str]
+    name: str
+
+# FIXME where should these go
 class MetadataWithDataset(pydantic.BaseModel, extra=pydantic.Extra.allow):
     dataset: str
-
 DocumentWithDataset = GenericDocument[MetadataWithDataset]
-
-# from enum import Enum
-# from typing import List, Optional, Union
-#
-# from pydantic import BaseModel, Extra, Field, validator
-#
-# from .serialization import serialize_npy, serialize_parquet
-# from .utils import get_element_data
-#
-#
-# class ProvenanceData(BaseModel):
-#    source: str
-#    url: Optional[str]
-#    license: Optional[str]
-#    description: Optional[str]
-#
-#
-# class SampleData(BaseModel, extra=Extra.allow):
-#    uid: Optional[str] = Field(alias="_id")
-#    name: str
-#    provenance: ProvenanceData
-#
-#
-# class XASMetadata(BaseModel, extra=Extra.allow):
-#    element: XDIElement
-#    measurement_type: MeasurementEnum = "xas"
-#    provenance: ProvenanceData
-#    dataset: str  # FIXME is dataset just a tag or does it deserve to be separate
-#    sample_id: str
-#
-#
-# class XASMetadataDenormalized(BaseModel, extra=Extra.allow):
-#    element: XDIElement
-#    measurement_type: MeasurementEnum = "xas"
-#    provenance: ProvenanceData
-#    dataset: str
-#    sample: SampleData
-#
-#
-## FIXME clean this up with generic models???
-# class XASData(TiledData):
-#    uid: Optional[str] = Field(alias="_id")
-#    metadata: XASMetadata
-#
-#
-# class XASDataDenormalized(TiledData):
-#    uid: Optional[str] = Field(alias="_id")
-#    metadata: XASMetadataDenormalized
