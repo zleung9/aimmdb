@@ -20,7 +20,7 @@ from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
 from aimmdb.queries import OperationEnum, RawMongo, parse_path
 from aimmdb.schemas import GenericDocument
-from aimmdb.access import READ, WRITE, require_write_permission
+from aimmdb.access import READ, WRITE
 
 _mime_structure_association = {
     StructureFamily.array: "application/x-hdf5",
@@ -144,22 +144,17 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             dataset_to_specs=dataset_to_specs,
         )
 
-    @property
-    def permissions(self):
+    def permissions(self, dataset):
         """
         Return the permissions of the current principal
         """
         # FIXME in more sophisticated cases permissions may DEPEND on metadata
         # For example only being able to write to a particular dataset
         if self.access_policy is not None:
-            permissions = self.access_policy.permissions(self.principal)
+            permissions = self.access_policy.permissions(self.principal, dataset)
         else:
             # no access_policy => anyone can read/write
             permissions = {READ, WRITE}
-
-        # we should never reach a node which principal does not have permission to read
-        if READ not in permissions:
-            raise RuntimeError("reached unreadable node")
 
         return permissions
 
@@ -224,22 +219,29 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         document_model = self.spec_to_document_model[k]
         return document_model
 
-    @require_write_permission
     def post_sample(self, sample):
         sample.uid = aimmdb.uid.uid()
         result = self.sample_collection.insert_one(sample.dict())
         assert result.acknowledged == True
         return sample.uid
 
-    @require_write_permission
     def delete_sample(self, uid):
         result = self.sample_collection.delete_one({"uid" : uid})
         assert result.deleted_count == 1
 
-    @require_write_permission
     def post_metadata(self, metadata, structure_family, structure, specs):
+        # TODO reconsider this
         if self.path != ["uid"]:
             raise HTTPException(status_code=400, detail="AIMMCatalog only allows posting data to /uid")
+
+        # NOTE this is enforced outside of pydantic
+        dataset = metadata.get("dataset")
+        if dataset is None:
+            raise HTTPException(status_code=400, detail="AIMMCatalog requires that metadata contain a dataset key")
+
+        permissions = self.permissions(dataset)
+        if WRITE not in permissions:
+            raise HTTPException(status_code=403, detail=f"principal does not have write permissions to dataset {dataset}")
 
         key = aimmdb.uid.uid()
 
@@ -260,9 +262,8 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         except pydantic.ValidationError as err:
             raise HTTPException(status_code=400, detail=f"{err}")
 
-        # at this point according to the server the metadata matches the stated specs
+        # at this point according to the server the metadata matches the stated specs and the user has permissions to write
         # now check if we will accept these specs into the specified dataset
-        dataset = validated_document.metadata.dataset
         allowed_specs = self.dataset_to_specs.get(dataset, None)
 
         # FIXME think more about how to handle multiple specs
@@ -297,19 +298,24 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         specs = doc.get("specs", [])
         document_model = self._get_document_model(specs)
 
-        if doc["structure_family"] == StructureFamily.array:
+        doc = document_model.parse_obj(doc)
+        dataset = doc.metadata.dataset
+
+        permissions = self.permissions(dataset)
+
+        if doc.structure_family == StructureFamily.array:
             return WritingArrayAdapter(
                 self.metadata_collection,
                 self.data_directory,
-                document_model.parse_obj(doc),
-                self.permissions,
+                doc,
+                permissions,
             )
-        elif doc["structure_family"] == StructureFamily.dataframe:
+        elif doc.structure_family == StructureFamily.dataframe:
             return WritingDataFrameAdapter(
                 self.metadata_collection,
                 self.data_directory,
-                document_model.parse_obj(doc),
-                self.permissions,
+                doc,
+                permissions,
             )
         else:
             raise ValueError("Unsupported Structure Family value in the databse")
