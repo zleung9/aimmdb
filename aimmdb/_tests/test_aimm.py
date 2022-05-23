@@ -83,6 +83,11 @@ def test_basic(tmpdir):
     assert set(c["uid"]) == {key0, key1, key2}
     assert set(c["dataset"]["xas"]["uid"]) == {key2}
 
+    for k in [key0, key1, key2]:
+        del c["uid"][k]
+
+    assert len(c["uid"]) == 0
+
 def main():
     pytest.main()
 
