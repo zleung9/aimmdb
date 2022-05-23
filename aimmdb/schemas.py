@@ -111,7 +111,6 @@ class XASMetadata(pydantic.BaseModel, extra=pydantic.Extra.allow):
     dataset: str
     sample_id: Optional[str]
 
-Document = GenericDocument[Dict]
 
 class XASDocument(GenericDocument[XASMetadata]):
     @pydantic.validator("specs")
@@ -129,8 +128,3 @@ class XASDocument(GenericDocument[XASMetadata]):
 class SampleData(pydantic.BaseModel, extra=pydantic.Extra.allow):
     uid: Optional[str]
     name: str
-
-# FIXME where should these go
-class MetadataWithDataset(pydantic.BaseModel, extra=pydantic.Extra.allow):
-    dataset: str
-DocumentWithDataset = GenericDocument[MetadataWithDataset]

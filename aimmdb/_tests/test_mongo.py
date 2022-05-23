@@ -9,7 +9,7 @@ import aimmdb
 from aimmdb.adapters.mongo import MongoAdapter
 from aimmdb.queries import RawMongo
 from aimmdb.access import SimpleAccessPolicy
-from aimmdb.schemas import Document, XASDocument
+from aimmdb.schemas import XASDocument
 from tiled.authenticators import DictionaryAuthenticator
 
 from .utils import fail_with_status_code

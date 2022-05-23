@@ -19,7 +19,7 @@ import aimmdb.uid
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
 from aimmdb.queries import OperationEnum, RawMongo, parse_path
-from aimmdb.schemas import DocumentWithDataset, Document
+from aimmdb.schemas import GenericDocument
 from aimmdb.access import READ, WRITE, require_write_permission
 
 _mime_structure_association = {
@@ -34,6 +34,11 @@ key_translation = {
     "dataset": "metadata.dataset",
 }
 
+# default document model requires dataset in metadata
+class MetadataBase(pydantic.BaseModel, extra=pydantic.Extra.allow):
+    dataset: str
+
+Document = GenericDocument[MetadataBase]
 
 class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
     structure_family = "node"
@@ -88,9 +93,9 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
 
         # use DocumentWithDataset to require metadata.dataset to be present
         if spec_to_document_model is None:
-            self.spec_to_document_model = defaultdict(lambda : DocumentWithDataset)
+            self.spec_to_document_model = defaultdict(lambda : Document)
         else:
-            default_document_model = spec_to_document_model.pop("default", DocumentWithDataset)
+            default_document_model = spec_to_document_model.pop("default", Document)
             self.spec_to_document_model = defaultdict(lambda: default_document_model, {k : import_object(v) for k,v in spec_to_document_model.items()})
 
         self.dataset_to_specs = dataset_to_specs or {}
@@ -289,8 +294,8 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         return key
 
     def _build_node_from_doc(self, doc):
-        # NOTE we don't use self._get_document_model to do extra validation based on specs
-        document_model = Document
+        specs = doc.get("specs", [])
+        document_model = self._get_document_model(specs)
 
         if doc["structure_family"] == StructureFamily.array:
             return WritingArrayAdapter(

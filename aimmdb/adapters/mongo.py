@@ -22,13 +22,18 @@ import aimmdb.uid
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
 from aimmdb.queries import RawMongo
-from aimmdb.schemas import Document
+from aimmdb.schemas import GenericDocument
 from aimmdb.access import READ, WRITE, require_write_permission
 
 _mime_structure_association = {
     StructureFamily.array: "application/x-hdf5",
     StructureFamily.dataframe: APACHE_ARROW_FILE_MIME_TYPE,
 }
+
+class Metadata(pydantic.BaseModel, extra=pydantic.Extra.allow):
+    pass
+
+Document = GenericDocument[Metadata]
 
 class MongoAdapter(collections.abc.Mapping, IndexersMixin):
     structure_family = "node"
