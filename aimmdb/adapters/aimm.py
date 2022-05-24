@@ -303,7 +303,10 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             if sample is None:
                 raise HTTPException(status_code=400, detail=f"sample_id {sample_id} not found")
             else:
-                doc_dict[metadata].update(sample)
+                if "sample" in doc_dict["metadata"]:
+                    doc_dict["metadata"]["sample"].update(sample)
+                else:
+                    doc_dict["metadata"]["sample"] = sample
 
         self.metadata_collection.insert_one(doc_dict)
         return key
