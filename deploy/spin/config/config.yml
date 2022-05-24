@@ -1,28 +1,80 @@
 trees:
   - path: /
-    tree: aimmdb.adapters.mongo:MongoAdapter.from_uri
+    tree: aimmdb.adapters.aimm:AIMMCatalog.from_uri
     args:
       uri: mongodb://root:${MONGO_PASSWORD}@mongodb:27017/aimm?authSource=admin
       data_directory: /data
+      spec_to_document_model:
+        XAS: aimmdb.schemas:XASDocument
+      dataset_to_specs:
+        newville:
+          - XAS
+        aimm:
+          - XAS
+          - RIXS
+        aimm_core:
+          - XAS
+        iss:
+          - XAS
     access_control:
-      access_policy: aimmdb.access:AIMMAccessPolicy
+      access_policy: aimmdb.access:DatasetAccessPolicy
       args:
         provider: orcid
         access_lists:
-          0000-0002-5947-6017: aimmdb.access:AIMMAccessPolicy.READ  # Dan sees all
-          0000-0003-3670-0431: aimmdb.access:AIMMAccessPolicy.READWRITE  # Joe sees all
-          0000-0002-1539-0297: aimmdb.access:AIMMAccessPolicy.READ  # Dylan sees all
-          0000-0002-3337-2930: aimmdb.access:AIMMAccessPolicy.READ  # Eli sees all
-          0000-0002-5269-0125: aimmdb.access:AIMMAccessPolicy.READ  # Alex sees all
-          0000-0003-4351-6085: aimmdb.access:AIMMAccessPolicy.READ  # Deyu sees all
-          0000-0003-0666-8063: aimmdb.access:AIMMAccessPolicy.READ  # Wanli sees all
-          0000-0001-5266-5408: aimmdb.access:AIMMAccessPolicy.READ  # Zhu sees all
-          0000-0002-2473-0193: aimmdb.access:AIMMAccessPolicy.READ  # Juan sees all
-          0000-0003-0922-1363: aimmdb.access:AIMMAccessPolicy.READ  # Maria sees all
-          0000-0002-5181-9513: aimmdb.access:AIMMAccessPolicy.READ  # Matt sees all
-          0000-0001-5651-8405: aimmdb.access:AIMMAccessPolicy.READ  # Xiaohui sees all
+          0000-0003-3670-0431: # Joe
+            default: rw
+          0000-0002-5947-6017: # Dan
+            default: r
+            sandbox: rw
+            samples: rw
+          0000-0002-1539-0297: # Dylan
+            default: r
+            sandbox: rw
+            samples: rw
+          0000-0002-3337-2930: # Eli
+            default: r
+            sandbox: rw
+            samples: rw
+          0000-0002-5269-0125: # Alex
+            default: r
+            sandbox: rw
+            samples: rw
+          0000-0003-4351-6085: # Deyu
+            default: r
+            sandbox: rw
+            samples: rw
+          0000-0003-0666-8063: # Wanli
+            default: r
+            sandbox: rw
+            samples: rw
+          0000-0001-5266-5408: # Zhu
+            default: r
+            sandbox: rw
+            samples: rw
+          0000-0002-2473-0193: # Juan
+            default: r
+            sandbox: rw
+            samples: rw
+          0000-0003-0922-1363: # Maria
+            default: r
+            sandbox: rw
+            samples: rw
+          0000-0002-5181-9513: # Matt
+            default: r
+            sandbox: rw
+            samples: rw
+          0000-0001-5651-8405: # Xiaohui
+            default: r
+            sandbox: rw
+            samples: rw
+          0000-0001-9869-9005: # Fanchen
+            default: r
+            sandbox: rw
+            samples: rw
+          public:
+            newville: r
 authentication:
-  allow_anonymous_access: false
+  allow_anonymous_access: true
   providers:
     - provider: orcid
       authenticator: aimmdb.authentication:AIMMAuthenticator
