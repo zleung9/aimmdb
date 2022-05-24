@@ -32,6 +32,7 @@ key_translation = {
     "element": "metadata.element.symbol",
     "edge": "metadata.element.edge",
     "dataset": "metadata.dataset",
+    "sample": "metadata.sample_id",
 }
 
 # default document model requires dataset in metadata
