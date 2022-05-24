@@ -239,6 +239,7 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         if WRITE not in permissions:
             raise HTTPException(status_code=403, detail=f"principal does not have write permissions to dataset {dataset}")
 
+        # FIXME should we also delete measurements which refer to this sample?
         result = self.sample_collection.delete_one({"uid" : uid})
         assert result.deleted_count == 1
 
