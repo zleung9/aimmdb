@@ -220,19 +220,31 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         return document_model
 
     def post_sample(self, sample):
+        # FIXME this is a bit adhoc (samples is not a 'real' dataset)
+        dataset = "samples"
+        permissions = self.permissions(dataset)
+        if WRITE not in permissions:
+            raise HTTPException(status_code=403, detail=f"principal does not have write permissions to dataset {dataset}")
+
         sample.uid = aimmdb.uid.uid()
         result = self.sample_collection.insert_one(sample.dict())
         assert result.acknowledged == True
         return sample.uid
 
     def delete_sample(self, uid):
+        # FIXME this is a bit adhoc (samples is not a 'real' dataset)
+        dataset = "samples"
+        permissions = self.permissions(dataset)
+        if WRITE not in permissions:
+            raise HTTPException(status_code=403, detail=f"principal does not have write permissions to dataset {dataset}")
+
         result = self.sample_collection.delete_one({"uid" : uid})
         assert result.deleted_count == 1
 
     def post_metadata(self, metadata, structure_family, structure, specs):
         # TODO reconsider this
-        if self.path != ["uid"]:
-            raise HTTPException(status_code=400, detail="AIMMCatalog only allows posting data to /uid")
+#        if self.path != ["uid"]:
+#            raise HTTPException(status_code=400, detail="AIMMCatalog only allows posting data to /uid")
 
         # NOTE this is enforced outside of pydantic
         dataset = metadata.get("dataset")
@@ -284,14 +296,16 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         except AttributeError:
             sample_id = None
 
+        doc_dict = validated_document.dict()
+
         if sample_id is not None:
             sample = self.sample_collection.find_one({"uid" : sample_id}, {"_id" : False})
             if sample is None:
                 raise HTTPException(status_code=400, detail=f"sample_id {sample_id} not found")
             else:
-                validated_document.metadata.sample = sample
+                doc_dict[metadata].update(sample)
 
-        self.metadata_collection.insert_one(validated_document.dict())
+        self.metadata_collection.insert_one(doc_dict)
         return key
 
     def _build_node_from_doc(self, doc):
