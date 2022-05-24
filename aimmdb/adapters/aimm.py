@@ -242,9 +242,9 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         assert result.deleted_count == 1
 
     def post_metadata(self, metadata, structure_family, structure, specs):
-        # TODO reconsider this
-#        if self.path != ["uid"]:
-#            raise HTTPException(status_code=400, detail="AIMMCatalog only allows posting data to /uid")
+        # TODO reconsider how this should work
+        if self.path != ["uid"]:
+            raise HTTPException(status_code=400, detail="AIMMCatalog only allows posting data to /uid")
 
         # NOTE this is enforced outside of pydantic
         dataset = metadata.get("dataset")
