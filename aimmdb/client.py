@@ -35,7 +35,7 @@ class AIMMCatalog(Node):
 
 
 class XASClient(DataFrameClient):
-    def __repr__(self):
+    def describe(self):
         # this metadata are required
         element = self.metadata["element"]["symbol"]
         edge = self.metadata["element"]["edge"]
@@ -49,7 +49,10 @@ class XASClient(DataFrameClient):
 
         if name:
             desc = f"{name} {desc}"
+        return desc
 
+    def __repr__(self):
+        desc = self.describe()
         return f"<{type(self).__name__} ({desc})>"
 
     @property
