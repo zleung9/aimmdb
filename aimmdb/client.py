@@ -15,14 +15,14 @@ class MongoCatalog(Node):
 
 
 class AIMMCatalog(Node):
-    pass
-
     def write_xas(self, df, metadata, specs=None):
         specs = list(specs or [])
         specs.append("XAS")
 
         validated_metadata = XASMetadata.parse_obj(metadata)
-        self.write_dataframe(df, validated_metadata.dict(), specs=specs)
+        key = self.write_dataframe(df, validated_metadata.dict(), specs=specs)
+
+        return key
 
     def write_sample(self, metadata):
         sample = SampleData.parse_obj(metadata)
