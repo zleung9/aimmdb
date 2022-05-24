@@ -45,7 +45,7 @@ class SimpleAccessPolicy:
             if key == "public":
                 key = SpecialUsers.public
 
-            self.access_lists[SpecialUsers.public] = str_to_permissions(value)
+            self.access_lists[key] = str_to_permissions(value)
 
     def get_id(self, principal):
         # Get the id (i.e. username) of this Principal for the
