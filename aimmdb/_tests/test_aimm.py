@@ -6,7 +6,7 @@ import pydantic
 from tiled.client import from_tree
 
 import aimmdb
-from aimmdb.adapters.aimm import AIMMCatalog, key_translation
+from aimmdb.adapters.aimm import AIMMCatalog, key_to_query
 from aimmdb.queries import RawMongo
 from aimmdb.access import SimpleAccessPolicy
 from aimmdb.schemas import XASDocument
@@ -33,7 +33,7 @@ def test_basic(tmpdir):
         tree, api_key=api_key, authentication={"single_user_api_key": api_key}
     )
     assert type(c) == aimmdb.client.AIMMCatalog
-    assert set(c) == set(key_translation.keys())
+    assert set(c) == set(key_to_query.keys())
 
     x = np.random.rand(100, 100)
     metadata = {"foo": "bar"}
@@ -49,7 +49,6 @@ def test_basic(tmpdir):
     np.testing.assert_equal(x, node.read())
     assert {k: node.metadata[k] for k in metadata} == metadata
 
-
     metadata.update(dataset="sandbox2")
     df = pd.DataFrame({"a": np.random.rand(100), "b": np.random.rand(100)})
     key1 = c["uid"].write_dataframe(df, metadata)
@@ -61,7 +60,7 @@ def test_basic(tmpdir):
     assert set(c["uid"]) == {key0, key1}
 
     # we can write data with xas metadata to the xas dataset
-    metadata.update(dataset="xas", element={"symbol" : "Au", "edge" : "K"})
+    metadata.update(dataset="xas", element={"symbol": "Au", "edge": "K"})
     key2 = c["uid"].write_dataframe(df, metadata, specs=["XAS"])
     node = c["uid"][key2]
     pd.testing.assert_frame_equal(df, node.read())
@@ -87,6 +86,7 @@ def test_basic(tmpdir):
         del c["uid"][k]
 
     assert len(c["uid"]) == 0
+
 
 def main():
     pytest.main()

@@ -3,6 +3,7 @@ import getpass
 
 import pytest
 
+
 @pytest.fixture
 def enter_password(monkeypatch):
     """

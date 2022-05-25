@@ -14,6 +14,15 @@ class MongoCatalog(Node):
     pass
 
 
+class SampleKey:
+    def __init__(self, uid, name):
+        self.uid = uid
+        self.name = name
+
+    def __repr__(self):
+        return f"{self.name} ({self.uid})"
+
+
 class AIMMCatalog(Node):
     def write_xas(self, df, metadata, specs=None):
         specs = list(specs or [])
@@ -32,6 +41,34 @@ class AIMMCatalog(Node):
 
     def delete_sample(self, uid):
         self.context.delete_content(f"/sample/{uid}", None)
+
+    def __getitem__(self, key):
+        if isinstance(key, SampleKey):
+            return super().__getitem__(key.uid)
+        else:
+            return super().__getitem__(key)
+
+    def _keys_slice(self, start, stop, direction):
+        op_dict = self.metadata["_tiled"]["op"]
+        if (
+            op_dict["op_enum"] == "distinct"
+            and op_dict["distinct"] == "metadata.sample_id"
+        ):
+            for k, v in super()._items_slice(start, stop, direction):
+                yield SampleKey(uid=k, name=v.metadata["_tiled"]["sample"]["name"])
+        else:
+            yield from super()._keys_slice(start, stop, direction)
+
+    def _items_slice(self, start, stop, direction):
+        op_dict = self.metadata["_tiled"]["op"]
+        if (
+            op_dict["op_enum"] == "distinct"
+            and op_dict["distinct"] == "metadata.sample_id"
+        ):
+            for k, v in super()._items_slice(start, stop, direction):
+                yield (SampleKey(uid=k, name=v.metadata["_tiled"]["sample"]["name"]), v)
+        else:
+            yield from super()._items_slice(start, stop, direction)
 
 
 class XASClient(DataFrameClient):
@@ -58,93 +95,3 @@ class XASClient(DataFrameClient):
     @property
     def uid(self):
         return self.metadata["_tiled"]["uid"]
-
-
-# class AIMMCatalog(Node):
-#    def __repr__(self):
-#        element = self.metadata["element"].get("symbol", "*")
-#        edge = self.metadata["element"].get("edge", "*")
-#
-#        sample_id = self.metadata["sample"].get("_id", None)
-#        sample_name = self.metadata["sample"].get("name", None)
-#
-#        sample_repr = ""
-#        if sample_name:
-#            sample_repr = f"{sample_name} ({sample_id}) "
-#
-#        out = f"<{type(self).__name__} ({sample_repr}{element}-{edge}) {{"
-#
-#        N = 10
-#        keys = self._keys_slice(0, N, direction=1)
-#        key_reprs = list(map(repr, keys))
-#
-#        if key_reprs:
-#            out += key_reprs[0]
-#
-#        counter = 1
-#        for key_repr in key_reprs[1:]:
-#            if len(out) + len(key_repr) > 80:
-#                break
-#            out += ", " + key_repr
-#            counter += 1
-#
-#        approx_len = operator.length_hint(self)  # cheaper to compute than len(tree)
-#        # Are there more in the tree that what we displayed above?
-#        if approx_len > counter:
-#            out += f", ...}} ~{approx_len} entries>"
-#        else:
-#            out += "}>"
-#        return out
-#
-#    def post_sample(self, metadata):
-#        sample = SampleData.parse_obj(metadata)
-#        request = self.context._client.build_request(
-#            "POST", "/samples", json=sample.dict()
-#        )
-#
-#        r = self.context._send(request)
-#        if not r.status_code == 200:
-#            print(r.json())
-#            assert False
-#
-#        data = r.json()
-#        if "uid" in data:
-#            sample_id = data["uid"]
-#        else:
-#            raise RuntimeError(data)
-#
-#        return sample_id
-#
-#    def delete_sample(self, uid):
-#        request = self.context._client.build_request("DELETE", f"/samples/{uid}")
-#        r = self.context._send(request)
-#        if not r.status_code == 200:
-#            assert False
-#
-#    def post_xas(self, df, metadata):
-#        data = aimmdb.models.DataFrameData.from_pandas(df)
-#
-#        measurement = aimmdb.models.XASData(
-#            structure_family="dataframe",
-#            metadata=metadata,
-#            data=data,
-#        )
-#
-#        request = self.context._client.build_request(
-#            "POST",
-#            "/xas",
-#            content=msgpack.packb(measurement.dict()),
-#            headers={"content-type": "application/msgpack"},
-#        )
-#
-#        r = self.context._send(request)
-#        if not r.status_code == 200:
-#            assert False
-#
-#    def delete_xas(self, uid):
-#        request = self.context._client.build_request("DELETE", f"/xas/{uid}")
-#        r = self.context._send(request)
-#        if not r.status_code == 200:
-#            assert False
-#
-#

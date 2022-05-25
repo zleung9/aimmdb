@@ -11,8 +11,10 @@ from aimmdb.queries import RawMongo
 from aimmdb.access import SimpleAccessPolicy
 from aimmdb.schemas import XASDocument
 from tiled.authenticators import DictionaryAuthenticator
+from tiled.iterviews import ItemsView, KeysView, ValuesView
 
 from .utils import fail_with_status_code
+
 
 def test_basic(tmpdir):
     data_directory = tmpdir / "data"
@@ -130,11 +132,14 @@ def test_access(enter_password, tmpdir):
     c_joe._cached_len = None  # invalidate length cache
     assert len(c_joe) == 0
 
+
 def test_validation(enter_password, tmpdir):
     data_directory = tmpdir / "data"
     data_directory.mkdir()
-    spec_to_document_model = {"XAS" : XASDocument, "XAS_" : XASDocument}
-    tree = MongoAdapter.from_mongomock(data_directory, spec_to_document_model=spec_to_document_model)
+    spec_to_document_model = {"XAS": XASDocument, "XAS_": XASDocument}
+    tree = MongoAdapter.from_mongomock(
+        data_directory, spec_to_document_model=spec_to_document_model
+    )
 
     api_key = "secret"
     c = from_tree(
@@ -142,10 +147,10 @@ def test_validation(enter_password, tmpdir):
     )
     assert type(c) == aimmdb.client.MongoCatalog
 
-    df = pd.DataFrame({"a" : np.random.rand(100), "b" : np.random.rand(100)})
+    df = pd.DataFrame({"a": np.random.rand(100), "b": np.random.rand(100)})
     x = np.random.rand(100, 100)
-    xdi_element = {"symbol" : "Au", "edge": "K"}
-    metadata = {"element" : xdi_element, "dataset" : "foo"}
+    xdi_element = {"symbol": "Au", "edge": "K"}
+    metadata = {"element": xdi_element, "dataset": "foo"}
 
     key = c.write_dataframe(df, metadata, specs=["XAS", "FOO"])
     node = c[key]
@@ -158,11 +163,11 @@ def test_validation(enter_password, tmpdir):
         c.write_array(x, metadata, specs=["XAS"])
 
     # can't write dataframe with missing metadata
-    metadata_missing_dataset = {"element" : xdi_element}
+    metadata_missing_dataset = {"element": xdi_element}
     with fail_with_status_code(400):
         c.write_dataframe(df, metadata_missing_dataset, specs=["XAS"])
 
-    metadata_missing_element = {"dataset" : "foo"}
+    metadata_missing_element = {"dataset": "foo"}
     with fail_with_status_code(400):
         c.write_dataframe(df, metadata_missing_element, specs=["XAS"])
 
@@ -171,7 +176,7 @@ def test_validation(enter_password, tmpdir):
         c.write_dataframe(df, metadata_missing_element, specs=["XAS", "XAS_"])
 
     # check that failed writes are not visible to client
-    c._cached_len = None # invalidate length cache
+    c._cached_len = None  # invalidate length cache
     assert len(c) == 1
 
     # we can write arbitrary data if the spec is unspecified

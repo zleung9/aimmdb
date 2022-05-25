@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 from collections import defaultdict
+import copy
 
 import pydantic
 import pymongo
@@ -13,21 +14,31 @@ from tiled.adapters.utils import IndexersMixin, tree_repr
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView, ListView, import_object
+from tiled.utils import (
+    APACHE_ARROW_FILE_MIME_TYPE,
+    UNCHANGED,
+    DictView,
+    ListView,
+    import_object,
+)
+from tiled.iterviews import ItemsView, KeysView, ValuesView
 
 import aimmdb.uid
+import aimmdb.queries
+
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
 from aimmdb.queries import OperationEnum, RawMongo, parse_path
 from aimmdb.schemas import GenericDocument
 from aimmdb.access import READ, WRITE
 
+
 _mime_structure_association = {
     StructureFamily.array: "application/x-hdf5",
     StructureFamily.dataframe: APACHE_ARROW_FILE_MIME_TYPE,
 }
 
-key_translation = {
+key_to_query = {
     "uid": "uid",
     "element": "metadata.element.symbol",
     "edge": "metadata.element.edge",
@@ -39,9 +50,11 @@ key_translation = {
 class MetadataBase(pydantic.BaseModel, extra=pydantic.Extra.allow):
     dataset: str
 
+
 Document = GenericDocument[MetadataBase]
 
-class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
+
+class AIMMCatalog(collections.abc.Mapping):
     structure_family = "node"
     specs = ["AIMMCatalog"]
 
@@ -69,6 +82,9 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         spec_to_document_model=None,
         dataset_to_specs=None,
     ):
+
+        # FIXME try to do less everytime we construct a new object
+
         self.data_directory = Path(data_directory).resolve()
         if not self.data_directory.exists():
             raise ValueError(f"Directory {self.data_directory} does not exist.")
@@ -85,19 +101,31 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
 
         self.queries = queries or []
         self.sorting = sorting or []
-        self.metadata = metadata or {}
+        self.metadata = copy.deepcopy(metadata) or {}
         self.principal = principal
         self.access_policy = access_policy
 
         self.path = list(path or [])
-        self.op = parse_path(self.path, key_translation)
+        self.op = parse_path(self.path, key_to_query)
+        self.metadata["_tiled"] = {"op": self.op.dict()}
 
-        # use DocumentWithDataset to require metadata.dataset to be present
+        # inject sample metadata if we have selected on sample
+        self.metadata["_tiled"].pop("sample", None)
+        sample_query = key_to_query["sample"]
+        if sample_query in self.op.select:
+            sample_id = self.op.select[sample_query]
+            sample = self.sample_collection.find_one({"uid": sample_id}, {"_id": False})
+            if sample is not None:
+                self.metadata["_tiled"]["sample"] = sample
+
         if spec_to_document_model is None:
-            self.spec_to_document_model = defaultdict(lambda : Document)
+            self.spec_to_document_model = defaultdict(lambda: Document)
         else:
             default_document_model = spec_to_document_model.pop("default", Document)
-            self.spec_to_document_model = defaultdict(lambda: default_document_model, {k : import_object(v) for k,v in spec_to_document_model.items()})
+            self.spec_to_document_model = defaultdict(
+                lambda: default_document_model,
+                {k: import_object(v) for k, v in spec_to_document_model.items()},
+            )
 
         self.dataset_to_specs = dataset_to_specs or {}
 
@@ -126,11 +154,19 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             metadata=metadata,
             access_policy=access_policy,
             spec_to_document_model=spec_to_document_model,
-            dataset_to_specs=dataset_to_specs
+            dataset_to_specs=dataset_to_specs,
         )
 
     @classmethod
-    def from_mongomock(cls, data_directory, *, metadata=None, access_policy=None, spec_to_document_model=None, dataset_to_specs=None):
+    def from_mongomock(
+        cls,
+        data_directory,
+        *,
+        metadata=None,
+        access_policy=None,
+        spec_to_document_model=None,
+        dataset_to_specs=None,
+    ):
         import mongomock
 
         mongo_client = mongomock.MongoClient()
@@ -213,7 +249,9 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
 
     def _get_document_model(self, specs):
         # FIXME think more about how to handle multiple specs
-        spec_to_document_model_keys = set(self.spec_to_document_model.keys()).intersection(specs)
+        spec_to_document_model_keys = set(
+            self.spec_to_document_model.keys()
+        ).intersection(specs)
         if len(spec_to_document_model_keys) > 1:
             raise KeyError(f"specs {specs} matched more than one document model")
         k = spec_to_document_model_keys.pop() if spec_to_document_model_keys else None
@@ -225,7 +263,10 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         dataset = "samples"
         permissions = self.permissions(dataset)
         if WRITE not in permissions:
-            raise HTTPException(status_code=403, detail=f"principal does not have write permissions to dataset {dataset}")
+            raise HTTPException(
+                status_code=403,
+                detail=f"principal does not have write permissions to dataset {dataset}",
+            )
 
         sample.uid = aimmdb.uid.uid()
         result = self.sample_collection.insert_one(sample.dict())
@@ -237,25 +278,36 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         dataset = "samples"
         permissions = self.permissions(dataset)
         if WRITE not in permissions:
-            raise HTTPException(status_code=403, detail=f"principal does not have write permissions to dataset {dataset}")
+            raise HTTPException(
+                status_code=403,
+                detail=f"principal does not have write permissions to dataset {dataset}",
+            )
 
         # FIXME should we also delete measurements which refer to this sample?
-        result = self.sample_collection.delete_one({"uid" : uid})
+        result = self.sample_collection.delete_one({"uid": uid})
         assert result.deleted_count == 1
 
     def post_metadata(self, metadata, structure_family, structure, specs):
         # TODO reconsider how this should work
         if self.path != ["uid"]:
-            raise HTTPException(status_code=400, detail="AIMMCatalog only allows posting data to /uid")
+            raise HTTPException(
+                status_code=400, detail="AIMMCatalog only allows posting data to /uid"
+            )
 
         # NOTE this is enforced outside of pydantic
         dataset = metadata.get("dataset")
         if dataset is None:
-            raise HTTPException(status_code=400, detail="AIMMCatalog requires that metadata contain a dataset key")
+            raise HTTPException(
+                status_code=400,
+                detail="AIMMCatalog requires that metadata contain a dataset key",
+            )
 
         permissions = self.permissions(dataset)
         if WRITE not in permissions:
-            raise HTTPException(status_code=403, detail=f"principal does not have write permissions to dataset {dataset}")
+            raise HTTPException(
+                status_code=403,
+                detail=f"principal does not have write permissions to dataset {dataset}",
+            )
 
         key = aimmdb.uid.uid()
 
@@ -284,7 +336,10 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         # if this dataset has a set of allowed specs then specs must be a non-empty subset
         if allowed_specs is not None:
             if not specs or not set(specs).issubset(allowed_specs):
-                raise HTTPException(status_code=400, detail=f"specs ({specs}) are not a non-empty subset of allowed specs ({allowed_specs}) for dataset {dataset}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"specs ({specs}) are not a non-empty subset of allowed specs ({allowed_specs}) for dataset {dataset}",
+                )
 
         # After validating the document must be encoded to bytes again to make it compatible with MongoDB
         if validated_document.structure_family == StructureFamily.dataframe:
@@ -301,9 +356,11 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         doc_dict = validated_document.dict()
 
         if sample_id is not None:
-            sample = self.sample_collection.find_one({"uid" : sample_id}, {"_id" : False})
+            sample = self.sample_collection.find_one({"uid": sample_id}, {"_id": False})
             if sample is None:
-                raise HTTPException(status_code=400, detail=f"sample_id {sample_id} not found")
+                raise HTTPException(
+                    status_code=400, detail=f"sample_id {sample_id} not found"
+                )
             else:
                 if "sample" in doc_dict["metadata"]:
                     doc_dict["metadata"]["sample"].update(sample)
@@ -348,16 +405,11 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
 
     def __getitem__(self, key):
         path = self.path + [key]
-        operation = parse_path(path, key_translation)
+        op = parse_path(path, key_to_query)
 
         # if new path is a lookup, do it now
-        if operation[0] == OperationEnum.lookup:
-            select = operation[1]["select"]
-            if "uid" not in select:
-                raise RuntimeError(f"uid not in {select}")
-
-            query = self._build_mongo_query(select)
-
+        if op.op_enum == OperationEnum.lookup:
+            query = self._build_mongo_query(op.select)
             docs = list(self.metadata_collection.find(query))
 
             if len(docs) == 0:
@@ -374,44 +426,42 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
             return self.new_variation(path=path)
 
     def __len__(self):
-        if self.op[0] == OperationEnum.keys:
-            return len(self.op[1]["keys"])
-        elif self.op[0] == OperationEnum.distinct:
-            select = self.op[1]["select"]
-            distinct = self.op[1]["distinct"]
-            query = self._build_mongo_query(select)
+        if self.op.op_enum == OperationEnum.keys:
+            return len(self.op.keys)
+        elif self.op.op_enum == OperationEnum.distinct:
+            query = self._build_mongo_query(self.op.select)
             # NOTE _id is guarenteed unique
-            if distinct == "uid":
+            if self.op.distinct == "uid":
                 return self.metadata_collection.count_documents(query)
             else:
                 # FIXME wasteful to do the full self.op just to get the length
-                return len(self.metadata_collection.find(query).distinct(distinct))
-        elif self.op[0] == OperationEnum.lookup:
+                return len(
+                    self.metadata_collection.find(query).distinct(self.op.distinct)
+                )
+        elif self.op.op_enum == OperationEnum.lookup:
             raise RuntimeError("unreachable")
         else:
             raise RuntimeError("unreachable")
 
     def __iter__(self):
-        if self.op[0] == OperationEnum.keys:
-            yield from self.op[1]["keys"]
-        elif self.op[0] == OperationEnum.distinct:
-            select = self.op[1]["select"]
-            distinct = self.op[1]["distinct"]
-            query = self._build_mongo_query(select)
-            # NOTE _id is guarenteed unique
-            if distinct == "uid":
+        if self.op.op_enum == OperationEnum.keys:
+            yield from self.op.keys
+        elif self.op.op_enum == OperationEnum.distinct:
+            query = self._build_mongo_query(self.op.select)
+            # NOTE uid is guarenteed unique
+            if self.op.distinct == "uid":
                 for doc in self.metadata_collection.find(query, {"uid": 1}):
                     yield doc["uid"]
             else:
-                for v in self.metadata_collection.find(query).distinct(distinct):
+                for v in self.metadata_collection.find(query).distinct(
+                    self.op.distinct
+                ):
                     yield v
         elif self.op[0] == OperationEnum.lookup:
             raise RuntimeError("unreachable")
         else:
             raise RuntimeError("unreachable")
 
-    # The following three methods are used by IndexersMixin
-    # to define keys_indexer, items_indexer, and values_indexer.
     def _keys_slice(self, start, stop, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
         skip = start or 0
@@ -420,14 +470,12 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         else:
             limit = None
 
-        if self.op[0] == OperationEnum.keys:
-            yield from list(self.op[1]["keys"])[skip : skip + limit]
-        elif self.op[0] == OperationEnum.distinct:
-            select = self.op[1]["select"]
-            distinct = self.op[1]["distinct"]
-            query = self._build_mongo_query(select)
-            # NOTE _id is guarenteed unique
-            if distinct == "uid":
+        if self.op.op_enum == OperationEnum.keys:
+            yield from list(self.op.keys)[skip : skip + limit]
+        elif self.op.op_enum == OperationEnum.distinct:
+            query = self._build_mongo_query(self.op.select)
+            # NOTE uid is guarenteed unique
+            if self.op.distinct == "uid":
                 for doc in (
                     self.metadata_collection.find(query, {"uid": 1})
                     .skip(skip)
@@ -436,11 +484,11 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
                     yield doc["uid"]
             else:
                 # FIXME wasteful to recompute this here (compute on construction?)
-                for v in self.metadata_collection.find(query).distinct(distinct)[
-                    skip : skip + limit
-                ]:
+                for v in self.metadata_collection.find(query).distinct(
+                    self.op.distinct
+                )[skip : skip + limit]:
                     yield v
-        elif self.op[0] == OperationEnum.lookup:
+        elif self.op.op_enum == OperationEnum.lookup:
             raise RuntimeError("unreachable")
         else:
             raise RuntimeError("unreachable")
@@ -453,16 +501,12 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
         else:
             limit = None
 
-        if self.op[0] == OperationEnum.keys:
-            yield from [
-                (k, self[k]) for k in list(self.op[1]["keys"])[skip : skip + limit]
-            ]
-        elif self.op[0] == OperationEnum.distinct:
-            select = self.op[1]["select"]
-            distinct = self.op[1]["distinct"]
-            query = self._build_mongo_query(select)
-            # NOTE _id is guarenteed unique
-            if distinct == "uid":
+        if self.op.op_enum == OperationEnum.keys:
+            yield from [(k, self[k]) for k in self.op.keys[skip : skip + limit]]
+        elif self.op.op_enum == OperationEnum.distinct:
+            query = self._build_mongo_query(self.op.select)
+            # NOTE uid is guarenteed unique
+            if self.op.distinct == "uid":
                 for doc in (
                     self.metadata_collection.find(query, {"uid": 1})
                     .skip(skip)
@@ -472,18 +516,23 @@ class AIMMCatalog(collections.abc.Mapping, IndexersMixin):
                     yield (k, self[k])
             else:
                 # FIXME wasteful to recompute this here (compute on construction?)
-                for v in self.metadata_collection.find(query).distinct(distinct)[
-                    skip : skip + limit
-                ]:
+                for v in self.metadata_collection.find(query).distinct(
+                    self.op.distinct
+                )[skip : skip + limit]:
                     yield (v, self[v])
-        elif self.op[0] == OperationEnum.lookup:
+        elif self.op.op_enum == OperationEnum.lookup:
             raise RuntimeError("unreachable")
         else:
             raise RuntimeError("unreachable")
 
-    def _item_by_index(self, index, direction):
-        assert direction == 1, "direction=-1 should be handled by the client"
-        return self._items_slice(index, index + 1, 1)[0]
+    def keys(self):
+        return KeysView(lambda: len(self), self._keys_slice)
+
+    def values(self):
+        return ValuesView(lambda: len(self), self._items_slice)
+
+    def items(self):
+        return ItemsView(lambda: len(self), self._items_slice)
 
 
 def run_raw_mongo_query(query, tree):

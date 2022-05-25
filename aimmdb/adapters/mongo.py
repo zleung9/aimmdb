@@ -16,7 +16,14 @@ from tiled.adapters.utils import IndexersMixin, tree_repr
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView, ListView, import_object
+from tiled.utils import (
+    APACHE_ARROW_FILE_MIME_TYPE,
+    UNCHANGED,
+    DictView,
+    ListView,
+    import_object,
+)
+from tiled.iterviews import ItemsView, KeysView, ValuesView
 
 import aimmdb.uid
 from aimmdb.adapters.array import WritingArrayAdapter
@@ -30,12 +37,15 @@ _mime_structure_association = {
     StructureFamily.dataframe: APACHE_ARROW_FILE_MIME_TYPE,
 }
 
+
 class Metadata(pydantic.BaseModel, extra=pydantic.Extra.allow):
     pass
 
+
 Document = GenericDocument[Metadata]
 
-class MongoAdapter(collections.abc.Mapping, IndexersMixin):
+
+class MongoAdapter(collections.abc.Mapping):
     structure_family = "node"
     specs = ["MongoAdapter"]
 
@@ -80,10 +90,13 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
         self.access_policy = access_policy
 
         if spec_to_document_model is None:
-            self.spec_to_document_model = defaultdict(lambda : Document)
+            self.spec_to_document_model = defaultdict(lambda: Document)
         else:
             default_document_model = spec_to_document_model.pop("default", Document)
-            self.spec_to_document_model = defaultdict(lambda: default_document_model, {k : import_object(v) for k,v in spec_to_document_model.items()})
+            self.spec_to_document_model = defaultdict(
+                lambda: default_document_model,
+                {k: import_object(v) for k, v in spec_to_document_model.items()},
+            )
 
         super().__init__()
 
@@ -112,7 +125,14 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
         )
 
     @classmethod
-    def from_mongomock(cls, data_directory, *, metadata=None, access_policy=None, spec_to_document_model=None):
+    def from_mongomock(
+        cls,
+        data_directory,
+        *,
+        metadata=None,
+        access_policy=None,
+        spec_to_document_model=None,
+    ):
         import mongomock
 
         mongo_client = mongomock.MongoClient()
@@ -191,7 +211,9 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
         return self.new_variation(sorting=sorting)
 
     def _get_document_model(self, specs):
-        spec_to_document_model_keys = set(self.spec_to_document_model.keys()).intersection(specs)
+        spec_to_document_model_keys = set(
+            self.spec_to_document_model.keys()
+        ).intersection(specs)
         if len(spec_to_document_model_keys) > 1:
             raise KeyError(f"specs {specs} matched more than one document model")
         k = spec_to_document_model_keys.pop() if spec_to_document_model_keys else None
@@ -326,9 +348,14 @@ class MongoAdapter(collections.abc.Mapping, IndexersMixin):
         ):
             yield (doc["uid"], self._build_node_from_doc(doc))
 
-    def _item_by_index(self, index, direction):
-        assert direction == 1, "direction=-1 should be handled by the client"
-        return self._items_slice(index, index + 1, 1)[0]
+    def keys(self):
+        return KeysView(lambda: len(self), self._keys_slice)
+
+    def values(self):
+        return ValuesView(lambda: len(self), self._items_slice)
+
+    def items(self):
+        return ItemsView(lambda: len(self), self._items_slice)
 
 
 def run_raw_mongo_query(query, tree):

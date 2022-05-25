@@ -38,6 +38,7 @@ class SimpleAccessPolicy:
 
     >>> SimpleAccessPolicy({"alice": "rw", "bob": "r"}, provider="toy")
     """
+
     def __init__(self, access_lists, *, provider):
         self.access_lists = {}
         self.provider = provider
@@ -78,12 +79,14 @@ class SimpleAccessPolicy:
         else:
             return MapAdapter({})
 
+
 class DatasetAccessPolicy:
     """
     A mapping of user names to per dataset permissions
 
     >>> DatasetAccessPolicy({"alice": {"foo" : "r", "bar" : "rw"}, "bob": {"foo" : "r", "bar" : "r"}}, provider="toy")
     """
+
     def __init__(self, access_lists, *, provider):
         self.access_lists = {}
         self.provider = provider
@@ -99,7 +102,9 @@ class DatasetAccessPolicy:
             if default_perm:
                 default_perm = str_to_permissions(default_perm)
 
-            self.access_lists[principal_id] = defaultdict(lambda default_perm=default_perm: default_perm)
+            self.access_lists[principal_id] = defaultdict(
+                lambda default_perm=default_perm: default_perm
+            )
 
             for dset, perm in value.items():
                 self.access_lists[principal_id][dset] = str_to_permissions(perm)
@@ -142,6 +147,6 @@ class DatasetAccessPolicy:
             return tree.new_variation(principal=principal)
         else:
             datasets = [k for k, v in principal_access_list.items() if READ in v]
-            query = {"metadata.dataset" : {"$in" : datasets}}
+            query = {"metadata.dataset": {"$in": datasets}}
             queries = tree.queries + [query]
             return tree.new_variation(principal=principal, queries=queries)

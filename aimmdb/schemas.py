@@ -105,6 +105,9 @@ class MeasurementEnum(str, Enum):
     rixs = "rixs"
 
 
+# FIXME require more fields?
+# facility.name?
+# beamline.name?
 class XASMetadata(pydantic.BaseModel, extra=pydantic.Extra.allow):
     element: XDIElement
     measurement_type: MeasurementEnum = "xas"
@@ -112,6 +115,7 @@ class XASMetadata(pydantic.BaseModel, extra=pydantic.Extra.allow):
     sample_id: Optional[str]
 
 
+# FIXME validate on column names?
 class XASDocument(GenericDocument[XASMetadata]):
     @pydantic.validator("specs")
     def check_specs(cls, specs):
@@ -124,6 +128,7 @@ class XASDocument(GenericDocument[XASMetadata]):
         if structure_family != StructureFamily.dataframe:
             raise ValueError(f"{structure_family=}")
         return structure_family
+
 
 class SampleData(pydantic.BaseModel, extra=pydantic.Extra.allow):
     uid: Optional[str]
