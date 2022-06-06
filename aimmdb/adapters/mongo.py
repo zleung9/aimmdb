@@ -1,36 +1,30 @@
 import collections.abc
+import dataclasses
 import json
 import os
-from pathlib import Path
 from collections import defaultdict
-
-import pymongo
-
-import pydantic
-from pydantic import ValidationError
+from pathlib import Path
 
 import fastapi
+import pydantic
+import pymongo
 from fastapi import HTTPException
-
+from pydantic import ValidationError
 from tiled.adapters.utils import IndexersMixin, tree_repr
+from tiled.iterviews import ItemsView, KeysView, ValuesView
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import (
-    APACHE_ARROW_FILE_MIME_TYPE,
-    UNCHANGED,
-    DictView,
-    ListView,
-    import_object,
-)
-from tiled.iterviews import ItemsView, KeysView, ValuesView
+from tiled.utils import (APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView,
+                         ListView, import_object)
 
 import aimmdb.uid
+from aimmdb.access import READ, WRITE, require_write_permission
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
 from aimmdb.queries import RawMongo
 from aimmdb.schemas import GenericDocument
-from aimmdb.access import READ, WRITE, require_write_permission
+from aimmdb.utils import make_dict
 
 _mime_structure_association = {
     StructureFamily.array: "application/x-hdf5",
@@ -229,6 +223,10 @@ class MongoAdapter(collections.abc.Mapping):
         except KeyError as err:
             raise HTTPException(status_code=400, detail=f"{err}")
 
+        # FIXME need to unpack into dict because DataFrameStructure is a dataclass so in this case structure will be
+        # an anonymous pydantic generated type which will not pass validation for the document
+        structure = make_dict(structure)
+
         try:
             validated_document = document_model(
                 uid=key,
@@ -241,13 +239,8 @@ class MongoAdapter(collections.abc.Mapping):
         except pydantic.ValidationError as err:
             raise HTTPException(status_code=400, detail=f"{err}")
 
-        # After validating the document must be encoded to bytes again to make it compatible with MongoDB
-        if validated_document.structure_family == StructureFamily.dataframe:
-            validated_document.structure.micro.meta = bytes(
-                serialize_arrow(validated_document.structure.micro.meta, {})
-            )
-
-        self.metadata_collection.insert_one(validated_document.dict())
+        # FIXME need to use make_dict to handle dataclass values
+        self.metadata_collection.insert_one(make_dict(validated_document))
         return key
 
     def _build_node_from_doc(self, doc):

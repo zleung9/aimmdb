@@ -1,7 +1,18 @@
+import dataclasses
 import importlib
 import json
 
 import h5py
+import pydantic
+
+
+def make_dict(x):
+    if isinstance(x, pydantic.BaseModel):
+        return {k: make_dict(v) for k, v in x}
+    elif dataclasses.is_dataclass(x):
+        return {f.name: make_dict(getattr(x, f.name)) for f in dataclasses.fields(x)}
+    else:
+        return x
 
 
 # read an hdf5 group recursively into memory

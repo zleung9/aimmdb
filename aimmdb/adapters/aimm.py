@@ -1,37 +1,29 @@
 import collections.abc
+import copy
 import json
 import os
-from pathlib import Path
 from collections import defaultdict
-import copy
+from pathlib import Path
 
 import pydantic
 import pymongo
-
 from fastapi import HTTPException
-
 from tiled.adapters.utils import IndexersMixin, tree_repr
+from tiled.iterviews import ItemsView, KeysView, ValuesView
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import (
-    APACHE_ARROW_FILE_MIME_TYPE,
-    UNCHANGED,
-    DictView,
-    ListView,
-    import_object,
-)
-from tiled.iterviews import ItemsView, KeysView, ValuesView
+from tiled.utils import (APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView,
+                         ListView, import_object)
 
-import aimmdb.uid
 import aimmdb.queries
-
+import aimmdb.uid
+from aimmdb.access import READ, WRITE
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
 from aimmdb.queries import OperationEnum, RawMongo, parse_path
 from aimmdb.schemas import GenericDocument
-from aimmdb.access import READ, WRITE
-
+from aimmdb.utils import make_dict
 
 _mime_structure_association = {
     StructureFamily.array: "application/x-hdf5",
@@ -63,8 +55,8 @@ class AIMMCatalog(collections.abc.Mapping):
     register_query_lazy = query_registry.register_lazy
 
     # TODO remove when writing routes are upstreamed to tiled
-    from aimmdb.router_tiled import router as router_tiled
     from aimmdb.router import router
+    from aimmdb.router_tiled import router as router_tiled
 
     include_routers = [router_tiled, router]
 
@@ -288,6 +280,7 @@ class AIMMCatalog(collections.abc.Mapping):
         assert result.deleted_count == 1
 
     def post_metadata(self, metadata, structure_family, structure, specs):
+
         # TODO reconsider how this should work
         if self.path != ["uid"]:
             raise HTTPException(
@@ -316,6 +309,10 @@ class AIMMCatalog(collections.abc.Mapping):
         except KeyError as err:
             raise HTTPException(status_code=400, detail=f"{err}")
 
+        # FIXME need to unpack into dict because DataFrameStructure is a dataclass so in this case structure will be
+        # an anonymous pydantic generated type which will not pass validation for the document
+        structure = make_dict(structure)
+
         try:
             validated_document = document_model(
                 uid=key,
@@ -341,19 +338,13 @@ class AIMMCatalog(collections.abc.Mapping):
                     detail=f"specs ({specs}) are not a non-empty subset of allowed specs ({allowed_specs}) for dataset {dataset}",
                 )
 
-        # After validating the document must be encoded to bytes again to make it compatible with MongoDB
-        if validated_document.structure_family == StructureFamily.dataframe:
-            validated_document.structure.micro.meta = bytes(
-                serialize_arrow(validated_document.structure.micro.meta, {})
-            )
-
         # FIXME what if metadata is a dict?
         try:
             sample_id = validated_document.metadata.sample_id
         except AttributeError:
             sample_id = None
 
-        doc_dict = validated_document.dict()
+        doc_dict = make_dict(validated_document)
 
         if sample_id is not None:
             sample = self.sample_collection.find_one({"uid": sample_id}, {"_id": False})
@@ -462,6 +453,8 @@ class AIMMCatalog(collections.abc.Mapping):
         else:
             raise RuntimeError("unreachable")
 
+    # FIXME what do I need to do to make tail work
+    # FIXME negative indexing is broken
     def _keys_slice(self, start, stop, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
         skip = start or 0

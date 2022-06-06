@@ -1,13 +1,11 @@
 import os
 from sys import platform
 
-from fastapi import HTTPException
-
 import dask
 import pandas as pd
+from fastapi import HTTPException
 from tiled.adapters.dataframe import DataFrameAdapter
-from tiled.server.pydantic_dataframe import DataFrameStructure
-from tiled.structures.dataframe import deserialize_arrow
+from tiled.structures.dataframe import DataFrameStructure, deserialize_arrow
 
 from aimmdb.access import require_write_permission
 

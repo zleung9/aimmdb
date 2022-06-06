@@ -1,20 +1,20 @@
 # NOTE these routes are all meant to be upstreamed into tiled
 
 import base64
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import pydantic
-from fastapi import APIRouter, Request, Security, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Security
 from tiled.server.core import json_or_msgpack
 from tiled.server.dependencies import entry
-from tiled.server.schemas import Structure
+from tiled.server.pydantic_array import ArrayStructure
 from tiled.structures.core import StructureFamily
-from tiled.structures.dataframe import deserialize_arrow
+from tiled.structures.dataframe import DataFrameStructure, deserialize_arrow
 
 
 class PostMetadataRequest(pydantic.BaseModel):
     structure_family: StructureFamily
-    structure: Structure
+    structure: Union[ArrayStructure, DataFrameStructure]
     metadata: Dict
     specs: List[str]
 
@@ -32,19 +32,19 @@ def post_metadata(
     body: PostMetadataRequest,
     entry=Security(entry, scopes=["write:data", "write:metadata"]),
 ):
-    if body.structure_family == StructureFamily.dataframe:
-        # Decode meta
-        meta = body.structure.micro["meta"]
-        body.structure.micro["meta"] = deserialize_arrow(base64.b64decode(meta))
 
-    try:
+    if body.structure_family == StructureFamily.dataframe:
+        body.structure.micro.meta = base64.b64decode(body.structure.micro.meta)
+        body.structure.micro.divisions = base64.b64decode(body.structure.micro.divisions)
+
+    if hasattr(entry, "post_metadata"):
         key = entry.post_metadata(
             metadata=body.metadata,
             structure_family=body.structure_family,
             structure=body.structure,
             specs=body.specs,
         )
-    except AttributeError:
+    else:
         raise HTTPException(
             status_code=404, detail="entry does not support posting metadata"
         )

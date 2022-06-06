@@ -4,8 +4,8 @@ from typing import Dict, Generic, List, Optional, TypeVar, Union
 import pydantic
 import pydantic.generics
 from tiled.server.pydantic_array import ArrayStructure
-from tiled.server.pydantic_dataframe import DataFrameStructure
 from tiled.structures.core import StructureFamily
+from tiled.structures.dataframe import DataFrameStructure
 from tiled.structures.xarray import DataArrayStructure, DatasetStructure
 
 from aimmdb.utils import get_element_data
