@@ -7,7 +7,8 @@ from tiled.client.node import Node
 from tiled.client.utils import handle_error
 
 import aimmdb
-from aimmdb.schemas import XASMetadata, SampleData
+from aimmdb.schemas import SampleData, XASMetadata
+
 
 def _describe_xas(*, element, edge, sample_name=None):
     desc = f"{element}-{edge}"
@@ -28,6 +29,7 @@ class SampleKey:
     def __repr__(self):
         return f"{self.name} ({self.uid})"
 
+
 class XASKey:
     def __init__(self, uid, element, edge, sample_name=None):
         self.uid = uid
@@ -36,7 +38,9 @@ class XASKey:
         self.sample_name = sample_name
 
     def __repr__(self):
-        desc = _describe_xas(element=self.element, edge=self.edge, sample_name=self.sample_name)
+        desc = _describe_xas(
+            element=self.element, edge=self.edge, sample_name=self.sample_name
+        )
         return f"{desc} ({self.uid})"
 
     @classmethod
@@ -46,7 +50,12 @@ class XASKey:
             sample_name = client.metadata["sample"]["name"]
         except KeyError:
             sample_name = None
-        return cls(uid=client.uid, element=client.element, edge=client.edge, sample_name=sample_name)
+        return cls(
+            uid=client.uid,
+            element=client.element,
+            edge=client.edge,
+            sample_name=sample_name,
+        )
 
 
 class AIMMCatalog(Node):
@@ -76,6 +85,8 @@ class AIMMCatalog(Node):
         else:
             return super().__getitem__(key)
 
+    # FIXME what do I need to do to make tail work
+    # FIXME negative indexing is broken
     def _keys_slice(self, start, stop, direction):
         op_dict = self.metadata["_tiled"]["op"]
         if (
@@ -84,10 +95,7 @@ class AIMMCatalog(Node):
         ):
             for k, v in super()._items_slice(start, stop, direction):
                 yield SampleKey(uid=k, name=v.metadata["_tiled"]["sample"]["name"])
-        elif (
-            op_dict["op_enum"] == "distinct"
-            and op_dict["distinct"] == "uid"
-            ):
+        elif op_dict["op_enum"] == "distinct" and op_dict["distinct"] == "uid":
             for k, v in super()._items_slice(start, stop, direction):
                 if isinstance(v, XASClient):
                     k = XASKey.from_client(v)
@@ -103,10 +111,7 @@ class AIMMCatalog(Node):
         ):
             for k, v in super()._items_slice(start, stop, direction):
                 yield (SampleKey(uid=k, name=v.metadata["_tiled"]["sample"]["name"]), v)
-        elif (
-            op_dict["op_enum"] == "distinct"
-            and op_dict["distinct"] == "uid"
-            ):
+        elif op_dict["op_enum"] == "distinct" and op_dict["distinct"] == "uid":
             for k, v in super()._items_slice(start, stop, direction):
                 if isinstance(v, XASClient):
                     k = XASKey.from_client(v)
@@ -122,7 +127,9 @@ class XASClient(DataFrameClient):
             sample_name = self.metadata["sample"]["name"]
         except KeyError:
             sample_name = None
-        return _describe_xas(element=self.element, edge=self.edge, sample_name=sample_name)
+        return _describe_xas(
+            element=self.element, edge=self.edge, sample_name=sample_name
+        )
 
     def __repr__(self):
         desc = self.describe()

@@ -1,16 +1,15 @@
 import numpy as np
 import pandas as pd
-import pytest
 import pydantic
-
+import pytest
+from tiled.authenticators import DictionaryAuthenticator
 from tiled.client import from_tree
 
 import aimmdb
+from aimmdb.access import SimpleAccessPolicy
 from aimmdb.adapters.aimm import AIMMCatalog, key_to_query
 from aimmdb.queries import RawMongo
-from aimmdb.access import SimpleAccessPolicy
 from aimmdb.schemas import XASDocument
-from tiled.authenticators import DictionaryAuthenticator
 
 from .utils import fail_with_status_code
 

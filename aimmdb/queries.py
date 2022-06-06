@@ -4,7 +4,6 @@ from enum import Enum
 from typing import Dict, List
 
 import pydantic
-
 from tiled.queries import register
 
 

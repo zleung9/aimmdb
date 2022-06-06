@@ -35,7 +35,9 @@ def post_metadata(
 
     if body.structure_family == StructureFamily.dataframe:
         body.structure.micro.meta = base64.b64decode(body.structure.micro.meta)
-        body.structure.micro.divisions = base64.b64decode(body.structure.micro.divisions)
+        body.structure.micro.divisions = base64.b64decode(
+            body.structure.micro.divisions
+        )
 
     if hasattr(entry, "post_metadata"):
         key = entry.post_metadata(

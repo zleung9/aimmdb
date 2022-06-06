@@ -1,7 +1,6 @@
 from collections import defaultdict
 
 from fastapi import HTTPException
-
 from tiled.adapters.mapping import MapAdapter
 from tiled.utils import SpecialUsers, import_object
 

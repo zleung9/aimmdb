@@ -1,11 +1,9 @@
 from typing import Dict
 
 import pydantic
-
-from fastapi import APIRouter, Request, Security, HTTPException, Depends
-
+from fastapi import APIRouter, Depends, HTTPException, Request, Security
 from tiled.server.core import json_or_msgpack
-from tiled.server.dependencies import get_root_tree, get_current_principal
+from tiled.server.dependencies import get_current_principal, get_root_tree
 
 from aimmdb.schemas import SampleData
 

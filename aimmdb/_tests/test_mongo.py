@@ -1,17 +1,16 @@
 import numpy as np
 import pandas as pd
-import pytest
 import pydantic
-
+import pytest
+from tiled.authenticators import DictionaryAuthenticator
 from tiled.client import from_tree
+from tiled.iterviews import ItemsView, KeysView, ValuesView
 
 import aimmdb
+from aimmdb.access import SimpleAccessPolicy
 from aimmdb.adapters.mongo import MongoAdapter
 from aimmdb.queries import RawMongo
-from aimmdb.access import SimpleAccessPolicy
 from aimmdb.schemas import XASDocument
-from tiled.authenticators import DictionaryAuthenticator
-from tiled.iterviews import ItemsView, KeysView, ValuesView
 
 from .utils import fail_with_status_code
 

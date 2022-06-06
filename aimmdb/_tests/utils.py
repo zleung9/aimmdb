@@ -2,7 +2,6 @@ import contextlib
 import getpass
 
 import pytest
-
 from tiled.client.utils import ClientError
 
 
