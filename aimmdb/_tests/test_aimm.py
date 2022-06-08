@@ -4,11 +4,12 @@ import pydantic
 import pytest
 from tiled.authenticators import DictionaryAuthenticator
 from tiled.client import from_tree
+from tiled.queries import Contains, Eq, Key
 
 import aimmdb
 from aimmdb.access import SimpleAccessPolicy
 from aimmdb.adapters.aimm import AIMMCatalog, key_to_query
-from aimmdb.queries import RawMongo
+from aimmdb.queries import In, NotIn
 from aimmdb.schemas import XASDocument
 
 from .utils import fail_with_status_code

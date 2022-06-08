@@ -22,7 +22,7 @@ import aimmdb.uid
 from aimmdb.access import READ, WRITE
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
-from aimmdb.queries import OperationEnum, make_mongo_query_eq, make_mongo_query_comparison, parse_path
+from aimmdb.queries import OperationEnum, parse_path, register_queries_helper
 from aimmdb.schemas import GenericDocument
 from aimmdb.utils import make_dict
 
@@ -525,17 +525,4 @@ class AIMMCatalog(collections.abc.Mapping):
         return ItemsView(lambda: len(self), self._items_slice)
 
 
-def eq(query, tree):
-    mongo_query = make_mongo_query_eq(query, prefix="metadata")
-    return tree.new_variation(queries=tree.queries + [mongo_query])
-
-
-AIMMCatalog.register_query(Eq, eq)
-
-
-def comparison(query, tree):
-    mongo_query = make_mongo_query_comparison(query, prefix="metadata")
-    return tree.new_variation(queries=tree.queries + [mongo_query])
-
-
-AIMMCatalog.register_query(Comparison, comparison)
+register_queries_helper(AIMMCatalog)

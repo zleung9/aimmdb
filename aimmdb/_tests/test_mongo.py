@@ -4,12 +4,12 @@ import pydantic
 import pytest
 from tiled.authenticators import DictionaryAuthenticator
 from tiled.client import from_tree
-from tiled.iterviews import ItemsView, KeysView, ValuesView
+from tiled.queries import Comparison, Contains, Eq, Key
 
 import aimmdb
 from aimmdb.access import SimpleAccessPolicy
 from aimmdb.adapters.mongo import MongoAdapter
-from aimmdb.queries import RawMongo
+from aimmdb.queries import In, NotIn
 from aimmdb.schemas import XASDocument
 
 from .utils import fail_with_status_code
@@ -132,7 +132,7 @@ def test_access(enter_password, tmpdir):
     assert len(c_joe) == 0
 
 
-def test_validation(enter_password, tmpdir):
+def test_validation(tmpdir):
     data_directory = tmpdir / "data"
     data_directory.mkdir()
     spec_to_document_model = {"XAS": XASDocument, "XAS_": XASDocument}
@@ -186,6 +186,59 @@ def test_validation(enter_password, tmpdir):
     key = c.write_dataframe(df, {}, specs=[])
     node = c[key]
     pd.testing.assert_frame_equal(df, node.read())
+
+
+def test_queries(tmpdir):
+    data_directory = tmpdir / "data"
+    data_directory.mkdir()
+    spec_to_document_model = {"XAS": XASDocument, "XAS_": XASDocument}
+    tree = MongoAdapter.from_mongomock(
+        data_directory, spec_to_document_model=spec_to_document_model
+    )
+
+    api_key = "secret"
+    c = from_tree(
+        tree, api_key=api_key, authentication={"single_user_api_key": api_key}
+    )
+    assert type(c) == aimmdb.client.MongoCatalog
+
+    df = pd.DataFrame({"a": np.random.rand(100), "b": np.random.rand(100)})
+
+    vals = list(range(20))
+    for i in vals:
+        c.write_dataframe(df, {"i": i})
+
+    results = c.search(Key("i") == 10).values()
+    assert len(results) == 1
+    assert results.first().metadata["i"] == 10
+
+    results = c.search(Key("i") > 10).values()
+    assert len(results) == 9
+    assert sorted([x.metadata["i"] for x in results]) == list(range(11, 20))
+
+    results = c.search(Key("i") >= 10).values()
+    assert len(results) == 10
+    assert sorted([x.metadata["i"] for x in results]) == list(range(10, 20))
+
+    results = c.search(Key("i") < 10).values()
+    assert len(results) == 10
+    assert sorted([x.metadata["i"] for x in results]) == list(range(0, 10))
+
+    results = c.search(Key("i") <= 10).values()
+    assert len(results) == 11
+    assert sorted([x.metadata["i"] for x in results]) == list(range(0, 11))
+
+    targets = [1, 3, 5, 7]
+    results = c.search(In("i", targets)).values()
+    assert len(results) == len(targets)
+    assert sorted([x.metadata["i"] for x in results]) == sorted(targets)
+
+    not_targets = [1, 3, 5, 7]
+    results = c.search(NotIn("i", not_targets)).values()
+    assert len(results) == len(set(vals) - set(not_targets))
+    assert sorted([x.metadata["i"] for x in results]) == sorted(
+        list(set(vals) - set(not_targets))
+    )
 
 
 def main():
