@@ -4,6 +4,8 @@ from fastapi import HTTPException
 from tiled.adapters.mapping import MapAdapter
 from tiled.utils import SpecialUsers, import_object
 
+from aimmdb.queries import In
+
 READ = object()  # sentinel
 WRITE = object()  # sentinel
 
@@ -146,6 +148,4 @@ class DatasetAccessPolicy:
             return tree.new_variation(principal=principal)
         else:
             datasets = [k for k, v in principal_access_list.items() if READ in v]
-            query = {"metadata.dataset": {"$in": datasets}}
-            queries = tree.queries + [query]
-            return tree.new_variation(principal=principal, queries=queries)
+            return tree.search(In("dataset", datasets))
