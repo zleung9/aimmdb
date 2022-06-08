@@ -15,8 +15,13 @@ from tiled.iterviews import ItemsView, KeysView, ValuesView
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import (APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView,
-                         ListView, import_object)
+from tiled.utils import (
+    APACHE_ARROW_FILE_MIME_TYPE,
+    UNCHANGED,
+    DictView,
+    ListView,
+    import_object,
+)
 
 import aimmdb.uid
 from aimmdb.access import READ, WRITE, require_write_permission
@@ -48,7 +53,7 @@ class MongoAdapter(collections.abc.Mapping):
     register_query_lazy = query_registry.register_lazy
 
     # TODO remove when writing routes are upstreamed to tiled
-    from aimmdb.router_tiled import router
+    from aimmdb.server.router_tiled import router
 
     include_routers = [router]
 
@@ -223,10 +228,6 @@ class MongoAdapter(collections.abc.Mapping):
         except KeyError as err:
             raise HTTPException(status_code=400, detail=f"{err}")
 
-        # FIXME need to unpack into dict because DataFrameStructure is a dataclass so in this case structure will be
-        # an anonymous pydantic generated type which will not pass validation for the document
-        structure = make_dict(structure)
-
         try:
             validated_document = document_model(
                 uid=key,
@@ -239,8 +240,7 @@ class MongoAdapter(collections.abc.Mapping):
         except pydantic.ValidationError as err:
             raise HTTPException(status_code=400, detail=f"{err}")
 
-        # FIXME need to use make_dict to handle dataclass values
-        self.metadata_collection.insert_one(make_dict(validated_document))
+        self.metadata_collection.insert_one(validated_document.dict())
         return key
 
     def _build_node_from_doc(self, doc):

@@ -13,8 +13,13 @@ from tiled.iterviews import ItemsView, KeysView, ValuesView
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import (APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView,
-                         ListView, import_object)
+from tiled.utils import (
+    APACHE_ARROW_FILE_MIME_TYPE,
+    UNCHANGED,
+    DictView,
+    ListView,
+    import_object,
+)
 
 import aimmdb.queries
 import aimmdb.uid
@@ -55,8 +60,8 @@ class AIMMCatalog(collections.abc.Mapping):
     register_query_lazy = query_registry.register_lazy
 
     # TODO remove when writing routes are upstreamed to tiled
-    from aimmdb.router import router
-    from aimmdb.router_tiled import router as router_tiled
+    from aimmdb.server.router import router
+    from aimmdb.server.router_tiled import router as router_tiled
 
     include_routers = [router_tiled, router]
 
@@ -309,10 +314,6 @@ class AIMMCatalog(collections.abc.Mapping):
         except KeyError as err:
             raise HTTPException(status_code=400, detail=f"{err}")
 
-        # FIXME need to unpack into dict because DataFrameStructure is a dataclass so in this case structure will be
-        # an anonymous pydantic generated type which will not pass validation for the document
-        structure = make_dict(structure)
-
         try:
             validated_document = document_model(
                 uid=key,
@@ -344,7 +345,7 @@ class AIMMCatalog(collections.abc.Mapping):
         except AttributeError:
             sample_id = None
 
-        doc_dict = make_dict(validated_document)
+        doc_dict = validated_document.dict()
 
         if sample_id is not None:
             sample = self.sample_collection.find_one({"uid": sample_id}, {"_id": False})

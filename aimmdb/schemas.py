@@ -5,9 +5,9 @@ import pydantic
 import pydantic.generics
 from tiled.server.pydantic_array import ArrayStructure
 from tiled.structures.core import StructureFamily
-from tiled.structures.dataframe import DataFrameStructure
 from tiled.structures.xarray import DataArrayStructure, DatasetStructure
 
+from aimmdb.server.pydantic_dataframe import DataFrameStructure
 from aimmdb.utils import get_element_data
 
 structure_association = {

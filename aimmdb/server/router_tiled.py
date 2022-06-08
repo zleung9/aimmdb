@@ -9,7 +9,8 @@ from tiled.server.core import json_or_msgpack
 from tiled.server.dependencies import entry
 from tiled.server.pydantic_array import ArrayStructure
 from tiled.structures.core import StructureFamily
-from tiled.structures.dataframe import DataFrameStructure, deserialize_arrow
+
+from aimmdb.server.pydantic_dataframe import DataFrameStructure
 
 
 class PostMetadataRequest(pydantic.BaseModel):
