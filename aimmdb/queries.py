@@ -4,7 +4,25 @@ from enum import Enum
 from typing import Dict, List
 
 import pydantic
-from tiled.queries import register
+from tiled.queries import Comparison, Eq, register
+
+
+def make_mongo_query_eq(query, prefix=None):
+    assert isinstance(query, Eq)
+    mongo_key = ".".join([prefix, query.key]) if prefix else query.key
+    mongo_query = {mongo_key: {"$eq": query.value}}
+    return mongo_query
+
+
+def make_mongo_query_comparison(query, prefix=None):
+    assert isinstance(query, Comparison)
+    op = query.operator
+    if op not in {"le", "lt", "ge", "gt"}:
+        raise ValueError(f"Unexpected operator {query.operator}.")
+    mongo_op = {"lt": "$lt", "le": "$lte", "gt": "$gt", "ge": "$gte"}[op]
+    mongo_key = ".".join([prefix, query.key]) if prefix else query.key
+    mongo_query = {mongo_key: {mongo_op: query.value}}
+    return mongo_query
 
 
 @register(name="raw_mongo")

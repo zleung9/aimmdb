@@ -10,23 +10,19 @@ import pymongo
 from fastapi import HTTPException
 from tiled.adapters.utils import IndexersMixin, tree_repr
 from tiled.iterviews import ItemsView, KeysView, ValuesView
+from tiled.queries import Comparison, Eq
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
 from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import (
-    APACHE_ARROW_FILE_MIME_TYPE,
-    UNCHANGED,
-    DictView,
-    ListView,
-    import_object,
-)
+from tiled.utils import (APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView,
+                         ListView, import_object)
 
 import aimmdb.queries
 import aimmdb.uid
 from aimmdb.access import READ, WRITE
 from aimmdb.adapters.array import WritingArrayAdapter
 from aimmdb.adapters.dataframe import WritingDataFrameAdapter
-from aimmdb.queries import OperationEnum, RawMongo, parse_path
+from aimmdb.queries import OperationEnum, make_mongo_query_eq, make_mongo_query_comparison, parse_path
 from aimmdb.schemas import GenericDocument
 from aimmdb.utils import make_dict
 
@@ -529,9 +525,17 @@ class AIMMCatalog(collections.abc.Mapping):
         return ItemsView(lambda: len(self), self._items_slice)
 
 
-def run_raw_mongo_query(query, tree):
-    query = json.loads(query.query)
-    return tree.new_variation(queries=tree.queries + [query])
+def eq(query, tree):
+    mongo_query = make_mongo_query_eq(query, prefix="metadata")
+    return tree.new_variation(queries=tree.queries + [mongo_query])
 
 
-AIMMCatalog.register_query(RawMongo, run_raw_mongo_query)
+AIMMCatalog.register_query(Eq, eq)
+
+
+def comparison(query, tree):
+    mongo_query = make_mongo_query_comparison(query, prefix="metadata")
+    return tree.new_variation(queries=tree.queries + [mongo_query])
+
+
+AIMMCatalog.register_query(Comparison, comparison)
