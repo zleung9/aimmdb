@@ -3,6 +3,7 @@ import copy
 import json
 import os
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 import pydantic
@@ -55,11 +56,10 @@ class AIMMCatalog(collections.abc.Mapping):
     register_query = query_registry.register
     register_query_lazy = query_registry.register_lazy
 
-    # TODO remove when writing routes are upstreamed to tiled
     from aimmdb.server.router import router
     from aimmdb.server.router_tiled import router as router_tiled
 
-    include_routers = [router_tiled, router]
+    include_routers = [router, router_tiled]
 
     def __init__(
         self,
@@ -93,10 +93,17 @@ class AIMMCatalog(collections.abc.Mapping):
         self.sample_collection = metadata_db.get_collection("samples")
 
         self.queries = queries or []
-        self.sorting = sorting or []
         self.metadata = copy.deepcopy(metadata) or {}
         self.principal = principal
         self.access_policy = access_policy
+
+        if sorting is None:
+            # _ is a special sentinal meaning 'the given order'
+            sorting = {"_": 1}
+        else:
+            sorting = {x[0]: x[1] for x in sorting}
+
+        self._sorting = sorting
 
         self.path = list(path or [])
         self.op = parse_path(self.path, key_to_query)
@@ -123,6 +130,10 @@ class AIMMCatalog(collections.abc.Mapping):
         self.dataset_to_specs = dataset_to_specs or {}
 
         super().__init__()
+
+    @property
+    def sorting(self):
+        return [(k, v) for k, v in self._sorting.items()]
 
     @classmethod
     def from_uri(
@@ -318,6 +329,7 @@ class AIMMCatalog(collections.abc.Mapping):
                 metadata=metadata,
                 specs=specs,
                 mimetype=_mime_structure_association[structure_family],
+                last_modified=datetime.utcnow(),
             )
         except pydantic.ValidationError as err:
             raise HTTPException(status_code=400, detail=f"{err}")
@@ -431,27 +443,6 @@ class AIMMCatalog(collections.abc.Mapping):
         else:
             raise RuntimeError("unreachable")
 
-    def __iter__(self):
-        if self.op.op_enum == OperationEnum.keys:
-            yield from self.op.keys
-        elif self.op.op_enum == OperationEnum.distinct:
-            query = self._build_mongo_query(self.op.select)
-            # NOTE uid is guarenteed unique
-            if self.op.distinct == "uid":
-                for doc in self.metadata_collection.find(query, {"uid": 1}):
-                    yield doc["uid"]
-            else:
-                for v in self.metadata_collection.find(query).distinct(
-                    self.op.distinct
-                ):
-                    yield v
-        elif self.op[0] == OperationEnum.lookup:
-            raise RuntimeError("unreachable")
-        else:
-            raise RuntimeError("unreachable")
-
-    # FIXME what do I need to do to make tail work
-    # FIXME negative indexing is broken
     def _keys_slice(self, start, stop, direction):
         assert direction == 1, "direction=-1 should be handled by the client"
         skip = start or 0
@@ -460,23 +451,34 @@ class AIMMCatalog(collections.abc.Mapping):
         else:
             limit = None
 
+        order = self._sorting["_"]
+
         if self.op.op_enum == OperationEnum.keys:
-            yield from list(self.op.keys)[skip : skip + limit]
+            keys = list(self.op.keys) if order == 1 else list(reversed(self.op.keys))
+            yield from keys[skip : skip + limit]
         elif self.op.op_enum == OperationEnum.distinct:
             query = self._build_mongo_query(self.op.select)
+            sorting = [
+                ("last_modified", order)
+            ]  # natural given order is by last_modified
+
             # NOTE uid is guarenteed unique
             if self.op.distinct == "uid":
                 for doc in (
                     self.metadata_collection.find(query, {"uid": 1})
+                    .sort(sorting)
                     .skip(skip)
                     .limit(limit)
                 ):
                     yield doc["uid"]
             else:
                 # FIXME wasteful to recompute this here (compute on construction?)
-                for v in self.metadata_collection.find(query).distinct(
+                distinct = self.metadata_collection.find(query).distinct(
                     self.op.distinct
-                )[skip : skip + limit]:
+                )
+                if order == -1:
+                    distinct = list(reversed(distinct))
+                for v in distinct[skip : skip + limit]:
                     yield v
         elif self.op.op_enum == OperationEnum.lookup:
             raise RuntimeError("unreachable")
@@ -484,36 +486,12 @@ class AIMMCatalog(collections.abc.Mapping):
             raise RuntimeError("unreachable")
 
     def _items_slice(self, start, stop, direction):
-        assert direction == 1, "direction=-1 should be handled by the client"
-        skip = start or 0
-        if stop is not None:
-            limit = stop - skip
-        else:
-            limit = None
+        for k in self._keys_slice(start, stop, direction):
+            # FIXME note this is wasteful because it requires a second db lookup to get the value
+            yield (k, self[k])
 
-        if self.op.op_enum == OperationEnum.keys:
-            yield from [(k, self[k]) for k in self.op.keys[skip : skip + limit]]
-        elif self.op.op_enum == OperationEnum.distinct:
-            query = self._build_mongo_query(self.op.select)
-            # NOTE uid is guarenteed unique
-            if self.op.distinct == "uid":
-                for doc in (
-                    self.metadata_collection.find(query, {"uid": 1})
-                    .skip(skip)
-                    .limit(limit)
-                ):
-                    k = doc["uid"]
-                    yield (k, self[k])
-            else:
-                # FIXME wasteful to recompute this here (compute on construction?)
-                for v in self.metadata_collection.find(query).distinct(
-                    self.op.distinct
-                )[skip : skip + limit]:
-                    yield (v, self[v])
-        elif self.op.op_enum == OperationEnum.lookup:
-            raise RuntimeError("unreachable")
-        else:
-            raise RuntimeError("unreachable")
+    def __iter__(self):
+        yield from self.keys()
 
     def keys(self):
         return KeysView(lambda: len(self), self._keys_slice)

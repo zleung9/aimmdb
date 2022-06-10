@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from sys import platform
 
 import dask
@@ -87,7 +88,8 @@ class WritingArrayAdapter:
             {"uid": self.doc.uid},
             {
                 "$set": {
-                    "data_url": f"file://localhost/{str(path).replace(os.sep, '/')}"
+                    "data_url": f"file://localhost/{str(path).replace(os.sep, '/')}",
+                    "last_modified": datetime.utcnow(),
                 }
             },
         )
