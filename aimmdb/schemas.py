@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import Enum
 from typing import Dict, Generic, List, Optional, TypeVar, Union
 
@@ -29,6 +30,7 @@ class GenericDocument(pydantic.generics.GenericModel, Generic[MetadataT]):
     mimetype: str
     data_blob: Optional[bytes]
     data_url: Optional[pydantic.AnyUrl]
+    last_modified: Optional[datetime]
 
     @pydantic.root_validator(skip_on_failure=True)
     def validate_structure_matches_structure_family(cls, values):
