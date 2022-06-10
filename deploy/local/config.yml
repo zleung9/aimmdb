@@ -3,15 +3,17 @@ trees:
     tree: aimmdb.adapters.aimm:AIMMCatalog.from_uri
     #    tree: aimmdb.adapters.mongo:MongoAdapter.from_uri
     args:
-      uri: mongodb://root:${MONGO_PASSWORD}@localhost:27017/aimm?authSource=admin
+      uri: mongodb://root:${MONGO_PASSWORD}@localhost:27018/aimm?authSource=admin
       data_directory: ./data
     access_control:
-      access_policy: aimmdb.access:AIMMAccessPolicy
+      access_policy: aimmdb.access:DatasetAccessPolicy
       args:
         provider: toy
         access_lists:
-          joe: "rw"
-          dan: "r"
+          joe:
+            default: rw
+          dan:
+            default: r
 authentication:
   allow_anonymous_access: false
   providers:
