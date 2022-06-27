@@ -4,74 +4,10 @@ from enum import Enum
 from typing import Any, Dict, List
 
 import pydantic
-from tiled.queries import Comparison, Contains, Eq, register
+from tiled.queries import Comparison, Contains, Eq, In, NotIn, NotEq, register
 from tiled.query_registration import register
 
 JSONSerializable = Any  # Feel free to refine this.
-
-
-@register(name="in")
-@dataclass
-class In:
-    """
-    Query if a given key's value is present in the specified list of values.
-
-    Parameters
-    ----------
-    key : str
-        e.g. "color", "sample.name"
-    value : JSONSerializable
-        May be a string, number, list, or dict.
-
-    Examples
-    --------
-
-    Search for color in ["red", "blue"]
-
-    >>> c.search(In("color", ["red", "blue"]))
-    """
-
-    key: str
-    value: List[JSONSerializable]
-
-    def encode(self):
-        return {"key": self.key, "value": json.dumps(self.value)}
-
-    @classmethod
-    def decode(cls, *, key, value):
-        return cls(key=key, value=json.loads(value))
-
-
-@register(name="notin")
-@dataclass
-class NotIn:
-    """
-    Query if a given key's value is not present in the specified list of values.
-
-    Parameters
-    ----------
-    key : str
-        e.g. "color", "sample.name"
-    value : JSONSerializable
-        May be a string, number, list, or dict.
-
-    Examples
-    --------
-
-    Search for color in ["red", "blue"]
-
-    >>> c.search(In("color", ["red", "blue"]))
-    """
-
-    key: str
-    value: List[JSONSerializable]
-
-    def encode(self):
-        return {"key": self.key, "value": json.dumps(self.value)}
-
-    @classmethod
-    def decode(cls, *, key, value):
-        return cls(key=key, value=json.loads(value))
 
 
 def make_mongo_query_in(query, prefix=None):
@@ -92,6 +28,13 @@ def make_mongo_query_eq(query, prefix=None):
     assert isinstance(query, Eq)
     mongo_key = ".".join([prefix, query.key]) if prefix else query.key
     mongo_query = {mongo_key: {"$eq": query.value}}
+    return mongo_query
+
+
+def make_mongo_query_neq(query, prefix=None):
+    assert isinstance(query, Eq)
+    mongo_key = ".".join([prefix, query.key]) if prefix else query.key
+    mongo_query = {mongo_key: {"$ne": query.value}}
     return mongo_query
 
 
@@ -118,6 +61,11 @@ def run_eq(query, tree):
     return tree.new_variation(queries=tree.queries + [mongo_query])
 
 
+def run_neq(query, tree):
+    mongo_query = make_mongo_query_neq(query, prefix="metadata")
+    return tree.new_variation(queries=tree.queries + [mongo_query])
+
+
 def run_comparison(query, tree):
     mongo_query = make_mongo_query_comparison(query, prefix="metadata")
     return tree.new_variation(queries=tree.queries + [mongo_query])
@@ -140,6 +88,7 @@ def run_notin(query, tree):
 
 def register_queries_helper(cls):
     cls.register_query(Eq, run_eq)
+    cls.register_query(NotEq, run_eq)
     cls.register_query(Comparison, run_comparison)
     cls.register_query(Contains, run_contains)
     cls.register_query(In, run_in)
