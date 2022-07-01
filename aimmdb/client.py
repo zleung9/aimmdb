@@ -1,49 +1,152 @@
 import operator
+from typing import List, Optional
 
-from tiled.client.node import Node
+import msgpack
 from tiled.client.dataframe import DataFrameClient
+from tiled.client.node import Node
+from tiled.client.utils import handle_error
+
+import aimmdb
+from aimmdb.schemas import SampleData, XASMetadata
+
+
+def _describe_xas(*, element, edge, sample_name=None):
+    desc = f"{element}-{edge}"
+    if sample_name:
+        desc = f"{sample_name} {desc}"
+    return desc
+
+
+class MongoCatalog(Node):
+    pass
+
+
+class SampleKey:
+    def __init__(self, uid, name):
+        self.uid = uid
+        self.name = name
+
+    def __repr__(self):
+        return f"{self.name} ({self.uid})"
+
+
+class XASKey:
+    def __init__(self, uid, element, edge, sample_name=None):
+        self.uid = uid
+        self.element = element
+        self.edge = edge
+        self.sample_name = sample_name
+
+    def __repr__(self):
+        desc = _describe_xas(
+            element=self.element, edge=self.edge, sample_name=self.sample_name
+        )
+        return f"{desc} ({self.uid})"
+
+    @classmethod
+    def from_client(cls, client):
+        assert isinstance(client, XASClient)
+        try:
+            sample_name = client.metadata["sample"]["name"]
+        except KeyError:
+            sample_name = None
+        return cls(
+            uid=client.uid,
+            element=client.element,
+            edge=client.edge,
+            sample_name=sample_name,
+        )
 
 
 class AIMMCatalog(Node):
-    def __repr__(self):
-        element = self.metadata["element"].get("symbol", "*")
-        edge = self.metadata["element"].get("edge", "*")
+    def write_xas(self, df, metadata, specs=None):
+        specs = list(specs or [])
+        specs.append("XAS")
 
-        sample_id = self.metadata["sample"].get("_id", None)
-        sample_name = self.metadata["sample"].get("name", None)
+        validated_metadata = XASMetadata.parse_obj(metadata)
+        key = self.write_dataframe(df, validated_metadata.dict(), specs=specs)
 
-        sample_repr = ""
-        if sample_name:
-            sample_repr = f"{sample_name} ({sample_id}) "
+        return key
 
-        out = f"<{type(self).__name__} ({sample_repr}{element}-{edge}) {{"
+    def write_sample(self, metadata):
+        sample = SampleData.parse_obj(metadata)
+        document = self.context.post_json("/sample", sample.dict())
+        uid = document["uid"]
+        return uid
 
-        N = 10
-        keys = self._keys_slice(0, N, direction=1)
-        key_reprs = list(map(repr, keys))
+    def delete_sample(self, uid):
+        self.context.delete_content(f"/sample/{uid}", None)
 
-        if key_reprs:
-            out += key_reprs[0]
-
-        counter = 1
-        for key_repr in key_reprs[1:]:
-            if len(out) + len(key_repr) > 80:
-                break
-            out += ", " + key_repr
-            counter += 1
-
-        approx_len = operator.length_hint(self)  # cheaper to compute than len(tree)
-        # Are there more in the tree that what we displayed above?
-        if approx_len > counter:
-            out += f", ...}} ~{approx_len} entries>"
+    def __getitem__(self, key):
+        if isinstance(key, SampleKey):
+            return super().__getitem__(key.uid)
+        elif isinstance(key, XASKey):
+            return super().__getitem__(key.uid)
         else:
-            out += "}>"
-        return out
+            return super().__getitem__(key)
+
+    def __delitem__(self, key):
+        if isinstance(key, XASKey):
+            return super().__delitem__(key.uid)
+        else:
+            return super().__delitem__(key)
+
+    def _keys_slice(self, start, stop, direction):
+        op_dict = self.metadata["_tiled"]["op"]
+        if (
+            op_dict["op_enum"] == "distinct"
+            and op_dict["distinct"] == "metadata.sample_id"
+        ):
+            for k, v in super()._items_slice(start, stop, direction):
+                yield SampleKey(uid=k, name=v.metadata["_tiled"]["sample"]["name"])
+        elif op_dict["op_enum"] == "distinct" and op_dict["distinct"] == "uid":
+            for k, v in super()._items_slice(start, stop, direction):
+                if isinstance(v, XASClient):
+                    k = XASKey.from_client(v)
+                yield k
+        else:
+            yield from super()._keys_slice(start, stop, direction)
+
+    def _items_slice(self, start, stop, direction):
+        op_dict = self.metadata["_tiled"]["op"]
+        if (
+            op_dict["op_enum"] == "distinct"
+            and op_dict["distinct"] == "metadata.sample_id"
+        ):
+            for k, v in super()._items_slice(start, stop, direction):
+                yield (SampleKey(uid=k, name=v.metadata["_tiled"]["sample"]["name"]), v)
+        elif op_dict["op_enum"] == "distinct" and op_dict["distinct"] == "uid":
+            for k, v in super()._items_slice(start, stop, direction):
+                if isinstance(v, XASClient):
+                    k = XASKey.from_client(v)
+                yield k, v
+        else:
+            yield from super()._items_slice(start, stop, direction)
 
 
 class XASClient(DataFrameClient):
+    def describe(self):
+        # sample name is optional
+        try:
+            sample_name = self.metadata["sample"]["name"]
+        except KeyError:
+            sample_name = None
+        return _describe_xas(
+            element=self.element, edge=self.edge, sample_name=sample_name
+        )
+
     def __repr__(self):
-        element = self.metadata["element"]["symbol"]
-        edge = self.metadata["element"]["edge"]
-        name = self.metadata["sample"]["name"]
-        return f"<{type(self).__name__} ({name} {element}-{edge})>"
+        desc = self.describe()
+        return f"<{type(self).__name__} ({desc})>"
+
+    @property
+    def uid(self):
+        return self.metadata["_tiled"]["uid"]
+
+    @property
+    def element(self):
+        return self.metadata["element"]["symbol"]
+
+    @property
+    def edge(self):
+        return self.metadata["element"]["edge"]

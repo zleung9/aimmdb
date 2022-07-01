@@ -5,3 +5,4 @@ spike
 *.egg-info
 *.sqlite
 build
+data
