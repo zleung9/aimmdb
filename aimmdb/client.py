@@ -85,8 +85,12 @@ class AIMMCatalog(Node):
         else:
             return super().__getitem__(key)
 
-    # FIXME what do I need to do to make tail work
-    # FIXME negative indexing is broken
+    def __delitem__(self, key):
+        if isinstance(key, XASKey):
+            return super().__delitem__(key.uid)
+        else:
+            return super().__delitem__(key)
+
     def _keys_slice(self, start, stop, direction):
         op_dict = self.metadata["_tiled"]["op"]
         if (
