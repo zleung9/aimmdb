@@ -72,7 +72,7 @@ class MongoAdapter(collections.abc.Mapping):
                 f"The given directory path {self.data_directory} is not a directory."
             )
         if not os.access(self.data_directory, os.W_OK):
-            raise ValueError("Directory {self.directory} is not writeable.")
+            raise ValueError(f"Directory {self.directory} is not writeable.")
 
         self.metadata_db = metadata_db
         self.metadata_collection = metadata_db.get_collection("metadata")
@@ -218,7 +218,7 @@ class MongoAdapter(collections.abc.Mapping):
 
     def _get_document_model(self, specs):
         spec_to_document_model_keys = set(
-            self.spec_to_document_model.keys()
+            self.spec_to_document_model
         ).intersection(specs)
         if len(spec_to_document_model_keys) > 1:
             raise KeyError(f"specs {specs} matched more than one document model")
