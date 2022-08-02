@@ -484,7 +484,8 @@ class AIMMCatalog(collections.abc.Mapping):
                 if order == -1:
                     distinct = list(reversed(distinct))
                 for v in distinct[skip : skip + limit]:
-                    yield v
+                    if v is not None: # FIXME how should we filter None
+                        yield v
         elif self.op.op_enum == OperationEnum.lookup:
             raise RuntimeError("unreachable")
         else:
