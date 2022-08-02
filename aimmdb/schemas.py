@@ -6,7 +6,6 @@ import pydantic
 import pydantic.generics
 from tiled.server.pydantic_array import ArrayStructure
 from tiled.structures.core import StructureFamily
-from tiled.structures.xarray import DataArrayStructure, DatasetStructure
 
 from aimmdb.server.pydantic_dataframe import DataFrameStructure
 from aimmdb.utils import get_element_data
@@ -14,8 +13,6 @@ from aimmdb.utils import get_element_data
 structure_association = {
     StructureFamily.array: ArrayStructure,
     StructureFamily.dataframe: DataFrameStructure,
-    StructureFamily.xarray_data_array: DataArrayStructure,
-    StructureFamily.xarray_dataset: DatasetStructure,
 }
 
 MetadataT = TypeVar("MetadataT")

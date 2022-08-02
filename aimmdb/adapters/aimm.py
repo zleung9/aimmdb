@@ -14,9 +14,14 @@ from tiled.iterviews import ItemsView, KeysView, ValuesView
 from tiled.queries import Comparison, Eq
 from tiled.query_registration import QueryTranslationRegistry
 from tiled.structures.core import StructureFamily
-from tiled.structures.dataframe import serialize_arrow
-from tiled.utils import (APACHE_ARROW_FILE_MIME_TYPE, UNCHANGED, DictView,
-                         ListView, import_object)
+from tiled.serialization.dataframe import serialize_arrow
+from tiled.utils import (
+    APACHE_ARROW_FILE_MIME_TYPE,
+    UNCHANGED,
+    DictView,
+    ListView,
+    import_object,
+)
 
 import aimmdb.queries
 import aimmdb.uid
@@ -253,9 +258,9 @@ class AIMMCatalog(collections.abc.Mapping):
 
     def _get_document_model(self, specs):
         # FIXME think more about how to handle multiple specs
-        spec_to_document_model_keys = set(
-            self.spec_to_document_model
-        ).intersection(specs)
+        spec_to_document_model_keys = set(self.spec_to_document_model).intersection(
+            specs
+        )
         if len(spec_to_document_model_keys) > 1:
             raise KeyError(f"specs {specs} matched more than one document model")
         k = spec_to_document_model_keys.pop() if spec_to_document_model_keys else None
