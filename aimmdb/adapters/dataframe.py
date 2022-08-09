@@ -38,20 +38,9 @@ class WritingDataFrameAdapter:
             if platform == "win32" and path[0] == "/":
                 path = path[1:]
 
-            self.dataframe_adapter = DataFrameAdapter(
-                dask.dataframe.from_pandas(
-                    pd.read_parquet(path),
-                    npartitions=self.doc.structure.macro.npartitions,
-                )
+            self.dataframe_adapter = DataFrameAdapter.from_pandas(
+                pd.read_parquet(path), npartitions=1
             )
-
-    #        elif self.doc.data_blob is not None:
-    #            self.dataframe_adapter = DataFrameAdapter(
-    #                dask.dataframe.from_pandas(
-    #                    deserialize_arrow(base64.b64decode(self.doc.data_blob)),
-    #                    npartitions=self.doc.structure.macro.npartitions,
-    #                )
-    #            )
 
     @property
     def specs(self):
