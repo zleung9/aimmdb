@@ -9,10 +9,10 @@ import numpy as np
 import pandas as pd
 from scipy.interpolate import InterpolatedUnivariateSpline
 from sklearn.linear_model import LinearRegression
-
-from aimm_post_processing import utils
 from tiled.client.dataframe import DataFrameClient
 from tiled.client.node import Node
+
+from aimmdb.postprocessing import utils
 
 
 class Operator(MSONable, ABC):
